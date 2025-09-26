@@ -53,7 +53,7 @@ RDATE:19970909T090000Z
 EXDATE:19970904T090000Z
 EXDATE;TZID=Europe/Moscow:19970911T130000
 EXDATE;TZID=America/New_York:19970918T050000`
-	value := set.String()
+	value := set.String(true)
 	if want != value {
 		t.Errorf("get %v, want %v", value, want)
 	}
@@ -80,17 +80,17 @@ RDATE:19970909T090000Z
 EXDATE:19970904T090000Z
 EXDATE:19970911T090000Z
 EXDATE:19970918T090000Z`
-	value := set.String()
+	value := set.String(true)
 	if want != value {
 		t.Errorf("get \n%v\n want \n%v\n", value, want)
 	}
 
-	sset, err := StrToRRuleSet(set.String())
+	sset, err := StrToRRuleSet(set.String(true))
 	if err != nil {
 		t.Errorf("Could not create RSET from set output")
 	}
-	if sset.String() != set.String() {
-		t.Errorf("RSET created from set output different than original set, %s", sset.String())
+	if sset.String(true) != set.String(true) {
+		t.Errorf("RSET created from set output different than original set, %s", sset.String(true))
 	}
 }
 
@@ -99,13 +99,13 @@ func TestSetRecurrence(t *testing.T) {
 	r, _ := NewRRule(ROption{Freq: YEARLY, Count: 1, Byweekday: []Weekday{TU},
 		Dtstart: time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
 	set.RRule(r)
-	value := set.Recurrence()
+	value := set.Recurrence(true)
 	if len(value) != 2 {
 		t.Errorf("Wrong length for recurrence got=%v want=%v", len(value), 2)
 	}
 	want := "DTSTART:19970902T090000Z\nRRULE:FREQ=YEARLY;COUNT=1;BYDAY=TU"
-	if set.String() != want {
-		t.Errorf("get %s, want %v", set.String(), want)
+	if set.String(true) != want {
+		t.Errorf("get %s, want %v", set.String(true), want)
 	}
 }
 
@@ -379,5 +379,42 @@ func TestRuleSetChangeDTStartTimezoneRespected(t *testing.T) {
 		if e.Location().String() != "UTC" {
 			t.Fatal("expected", "UTC", "got", e.Location().String())
 		}
+	}
+}
+
+func TestSetStr(t *testing.T) {
+	setStr := "RRULE:FREQ=DAILY;UNTIL=20180517T235959Z\n" +
+		"EXDATE;VALUE=DATE-TIME:20180525T070000Z,20180530T130000Z\n" +
+		"RDATE;VALUE=DATE-TIME:20180801T131313Z,20180902T141414Z\n"
+
+	set, err := StrToRRuleSet(setStr)
+	if err != nil {
+		t.Fatalf("StrToRRuleSet(%s) returned error: %v", setStr, err)
+	}
+
+	rule := set.GetRRule()
+	if rule == nil {
+		t.Errorf("Unexpected rrule parsed")
+	}
+	if rule.String() != "FREQ=DAILY;UNTIL=20180517T235959Z" {
+		t.Errorf("Unexpected rrule: %s", rule.String())
+	}
+
+	// matching parsed EXDates
+	exDates := set.GetExDate()
+	if len(exDates) != 2 {
+		t.Errorf("Unexpected number of exDates: %v != 2, %v", len(exDates), exDates)
+	}
+	if [2]string{timeToStr(exDates[0]), timeToStr(exDates[1])} != [2]string{"20180525T070000Z", "20180530T130000Z"} {
+		t.Errorf("Unexpected exDates: %v", exDates)
+	}
+
+	// matching parsed RDates
+	rDates := set.GetRDate()
+	if len(rDates) != 2 {
+		t.Errorf("Unexpected number of rDates: %v != 2, %v", len(rDates), rDates)
+	}
+	if [2]string{timeToStr(rDates[0]), timeToStr(rDates[1])} != [2]string{"20180801T131313Z", "20180902T141414Z"} {
+		t.Errorf("Unexpected exDates: %v", exDates)
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/teambition/rrule-go"
+	"github.com/yinjun1991/rrule-go"
 )
 
 func printTimeSlice(ts []time.Time) {
@@ -90,7 +90,7 @@ func ExampleSet() {
 		Dtstart: time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
 	set.RRule(r)
 
-	fmt.Println(set.String())
+	fmt.Println(set.String(true))
 	// DTSTART:19970902T090000Z
 	// RRULE:FREQ=DAILY;COUNT=7
 
@@ -113,7 +113,7 @@ func ExampleSet() {
 	set.RDate(time.Date(1997, 9, 7, 9, 0, 0, 0, time.UTC))
 	set.ExDate(time.Date(1997, 9, 16, 9, 0, 0, 0, time.UTC))
 
-	fmt.Println(set.String())
+	fmt.Println(set.String(true))
 	// DTSTART:19970902T090000Z
 	// RRULE:FREQ=WEEKLY;COUNT=4
 	// RDATE:19970907T090000Z
@@ -148,10 +148,10 @@ func ExampleSet() {
 func ExampleStrToRRule() {
 	// Compatible with old DTSTART
 	r, _ := rrule.StrToRRule("FREQ=DAILY;DTSTART=20060101T150405Z;COUNT=5")
-	fmt.Println(r.OrigOptions.RRuleString())
+	fmt.Println(r.Options.RRuleString())
 	// FREQ=DAILY;COUNT=5
 
-	fmt.Println(r.OrigOptions.String())
+	fmt.Println(r.Options.String())
 	// DTSTART:20060101T150405Z
 	// RRULE:FREQ=DAILY;COUNT=5
 
@@ -181,7 +181,7 @@ func ExampleStrToRRule() {
 
 func ExampleStrToRRuleSet() {
 	s, _ := rrule.StrToRRuleSet("DTSTART:20060101T150405Z\nRRULE:FREQ=DAILY;COUNT=5\nEXDATE:20060102T150405Z")
-	fmt.Println(s.String())
+	fmt.Println(s.String(true))
 	// DTSTART:20060101T150405Z
 	// RRULE:FREQ=DAILY;COUNT=5
 	// EXDATE:20060102T150405Z

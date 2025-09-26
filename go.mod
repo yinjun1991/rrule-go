@@ -1,3 +1,3 @@
-module github.com/teambition/rrule-go
+module github.com/yinjun1991/rrule-go
 
-go 1.16
+go 1.23.12

@@ -4,7 +4,10 @@ package rrule
 
 import (
 	"errors"
+	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -13,15 +16,159 @@ const (
 	MAXYEAR = 9999
 )
 
-// Next is a generator of time.Time.
-// It returns false of Ok if there is no value to generate.
-type Next func() (value time.Time, ok bool)
+const (
+	// DateTimeFormat is date-time format used in iCalendar (RFC 5545)
+	DateTimeFormat = "20060102T150405Z"
+	// LocalDateTimeFormat is a date-time format without Z prefix
+	LocalDateTimeFormat = "20060102T150405"
+	// DateFormat is date format used in iCalendar (RFC 5545)
+	DateFormat = "20060102"
+)
 
-type timeSlice []time.Time
+func timeToStr(time time.Time) string {
+	return time.UTC().Format(DateTimeFormat)
+}
 
-func (s timeSlice) Len() int           { return len(s) }
-func (s timeSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s timeSlice) Less(i, j int) bool { return s[i].Before(s[j]) }
+func strToTimeInLoc(str string, loc *time.Location) (time.Time, error) {
+	if len(str) == len(DateFormat) {
+		return time.ParseInLocation(DateFormat, str, loc)
+	}
+	if len(str) == len(LocalDateTimeFormat) {
+		return time.ParseInLocation(LocalDateTimeFormat, str, loc)
+	}
+	// date-time format carries zone info
+	return time.Parse(DateTimeFormat, str)
+}
+
+func appendIntsOption(options []string, key string, value []int) []string {
+	if len(value) == 0 {
+		return options
+	}
+	valueStr := make([]string, len(value))
+	for i, v := range value {
+		valueStr[i] = strconv.Itoa(v)
+	}
+	return append(options, fmt.Sprintf("%s=%s", key, strings.Join(valueStr, ",")))
+}
+
+func strToInts(value string) ([]int, error) {
+	contents := strings.Split(value, ",")
+	result := make([]int, len(contents))
+	var e error
+	for i, s := range contents {
+		result[i], e = strconv.Atoi(s)
+		if e != nil {
+			return nil, e
+		}
+	}
+	return result, nil
+}
+
+// https://tools.ietf.org/html/rfc5545#section-3.3.5
+// DTSTART:19970714T133000                       ; Local time
+// DTSTART:19970714T173000Z                      ; UTC time
+// DTSTART;TZID=America/New_York:19970714T133000 ; Local time and time zone reference
+func timeToRFCDatetimeStr(time time.Time) string {
+	if time.Location().String() != "UTC" {
+		return fmt.Sprintf(";TZID=%s:%s", time.Location().String(), time.Format(LocalDateTimeFormat))
+	}
+	return fmt.Sprintf(":%s", time.Format(DateTimeFormat))
+}
+
+// StrToDates is intended to parse RDATE and EXDATE properties supporting only
+// VALUE=DATE-TIME (DATE and PERIOD are not supported).
+// Accepts string with format: "VALUE=DATE-TIME;[TZID=...]:{time},{time},...,{time}"
+// or simply "{time},{time},...{time}" and parses it to array of dates
+// In case no time zone specified in str, when all dates are parsed in UTC
+func StrToDates(str string) (ts []time.Time, err error) {
+	return StrToDatesInLoc(str, time.UTC)
+}
+
+// StrToDatesInLoc same as StrToDates but it consideres default location to parse dates in
+// in case no location specified with TZID parameter
+func StrToDatesInLoc(str string, defaultLoc *time.Location) (ts []time.Time, err error) {
+	tmp := strings.Split(str, ":")
+	if len(tmp) > 2 {
+		return nil, fmt.Errorf("bad format")
+	}
+	loc := defaultLoc
+	if len(tmp) == 2 {
+		params := strings.Split(tmp[0], ";")
+		for _, param := range params {
+			if strings.HasPrefix(param, "TZID=") {
+				loc, err = parseTZID(param)
+			} else if param != "VALUE=DATE-TIME" && param != "VALUE=DATE" {
+				err = fmt.Errorf("unsupported: %v", param)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("bad dates param: %s", err.Error())
+			}
+		}
+		tmp = tmp[1:]
+	}
+	for _, datestr := range strings.Split(tmp[0], ",") {
+		t, err := strToTimeInLoc(datestr, loc)
+		if err != nil {
+			return nil, fmt.Errorf("strToTime failed: %v", err)
+		}
+		ts = append(ts, t)
+	}
+	return
+}
+
+// processRRuleName processes the name of an RRule off a multi-line RRule set
+func processRRuleName(line string) (string, error) {
+	line = strings.ToUpper(strings.TrimSpace(line))
+	if line == "" {
+		return "", fmt.Errorf("bad format %v", line)
+	}
+
+	nameLen := strings.IndexAny(line, ";:")
+	if nameLen <= 0 {
+		return "", fmt.Errorf("bad format %v", line)
+	}
+
+	name := line[:nameLen]
+	if strings.IndexAny(name, "=") > 0 {
+		return "", fmt.Errorf("bad format %v", line)
+	}
+
+	return name, nil
+}
+
+// StrToDtStart accepts string with format: "(TZID={timezone}:)?{time}" or "VALUE=DATE:{date}" and parses it to a date
+// may be used to parse DTSTART rules, without the DTSTART; part.
+func StrToDtStart(str string, defaultLoc *time.Location) (time.Time, error) {
+	// Handle VALUE=DATE parameter for all-day events
+	if strings.HasPrefix(str, "VALUE=DATE:") {
+		dateStr := str[len("VALUE=DATE:"):]
+		// Parse DATE format (YYYYMMDD) for all-day events
+		return strToTimeInLoc(dateStr, time.UTC) // All-day events use floating time (UTC)
+	}
+
+	tmp := strings.Split(str, ":")
+	if len(tmp) > 2 || len(tmp) == 0 {
+		return time.Time{}, fmt.Errorf("bad format")
+	}
+
+	if len(tmp) == 2 {
+		// tzid
+		loc, err := parseTZID(tmp[0])
+		if err != nil {
+			return time.Time{}, err
+		}
+		return strToTimeInLoc(tmp[1], loc)
+	}
+	// no tzid, len == 1
+	return strToTimeInLoc(tmp[0], defaultLoc)
+}
+
+func parseTZID(s string) (*time.Location, error) {
+	if !strings.HasPrefix(s, "TZID=") || len(s) == len("TZID=") {
+		return nil, fmt.Errorf("bad TZID parameter format")
+	}
+	return time.LoadLocation(s[len("TZID="):])
+}
 
 // Python: MO-SU: 0 - 6
 // Golang: SU-SAT 0 - 6
@@ -183,4 +330,13 @@ func after(next Next, dt time.Time, inc bool) time.Time {
 type optInt struct {
 	Int     int
 	Defined bool
+}
+
+func prepareTimeSet(set *[]time.Time, length int) {
+	if len(*set) < length {
+		*set = make([]time.Time, 0, length)
+		return
+	}
+
+	*set = (*set)[:0]
 }
