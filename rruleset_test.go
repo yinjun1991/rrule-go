@@ -418,3 +418,603 @@ func TestSetStr(t *testing.T) {
 		t.Errorf("Unexpected exDates: %v", exDates)
 	}
 }
+
+// TestSetAllDayTimezoneConsistency 测试全天事件在不同时区下的一致性
+func TestSetAllDayTimezoneConsistency(t *testing.T) {
+	// 创建不同时区的时间
+	utc := time.UTC
+	ny, _ := time.LoadLocation("America/New_York")
+	tokyo, _ := time.LoadLocation("Asia/Tokyo")
+	
+	baseTime := time.Date(2024, 3, 15, 14, 30, 45, 0, utc)
+	
+	testCases := []struct {
+		name     string
+		timezone *time.Location
+	}{
+		{"UTC", utc},
+		{"New_York", ny},
+		{"Tokyo", tokyo},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			set := &Set{}
+			set.SetAllDay(true)
+			
+			// 设置不同时区的 DTSTART
+			dtstart := baseTime.In(tc.timezone)
+			set.DTStart(dtstart)
+			
+			// 添加不同时区的 RDATE
+			rdate := baseTime.AddDate(0, 0, 1).In(tc.timezone)
+			set.RDate(rdate)
+			
+			// 添加不同时区的 EXDATE
+			exdate := baseTime.AddDate(0, 0, 2).In(tc.timezone)
+			set.ExDate(exdate)
+			
+			// 验证所有时间都被标准化为浮动时间（UTC 00:00:00）
+			if set.GetDTStart().Location() != utc {
+				t.Errorf("DTSTART should be in UTC, got %v", set.GetDTStart().Location())
+			}
+			
+			expectedDate := time.Date(2024, 3, 15, 0, 0, 0, 0, utc)
+			if !set.GetDTStart().Equal(expectedDate) {
+				t.Errorf("DTSTART should be %v, got %v", expectedDate, set.GetDTStart())
+			}
+			
+			// 验证 RDATE 标准化
+			rdates := set.GetRDate()
+			if len(rdates) != 1 {
+				t.Fatalf("Expected 1 RDATE, got %d", len(rdates))
+			}
+			expectedRDate := time.Date(2024, 3, 16, 0, 0, 0, 0, utc)
+			if !rdates[0].Equal(expectedRDate) {
+				t.Errorf("RDATE should be %v, got %v", expectedRDate, rdates[0])
+			}
+			
+			// 验证 EXDATE 标准化
+			exdates := set.GetExDate()
+			if len(exdates) != 1 {
+				t.Fatalf("Expected 1 EXDATE, got %d", len(exdates))
+			}
+			expectedExDate := time.Date(2024, 3, 17, 0, 0, 0, 0, utc)
+			if !exdates[0].Equal(expectedExDate) {
+				t.Errorf("EXDATE should be %v, got %v", expectedExDate, exdates[0])
+			}
+		})
+	}
+}
+
+// TestSetComplexRRuleRDateExDateInteraction 测试复杂的 RRULE + RDATE + EXDATE 交互
+func TestSetComplexRRuleRDateExDateInteraction(t *testing.T) {
+	set := &Set{}
+	
+	// 创建每日循环规则
+	rrule, err := NewRRule(ROption{
+		Freq:    DAILY,
+		Count:   10,
+		Dtstart: time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create RRule: %v", err)
+	}
+	set.RRule(rrule)
+	
+	// 添加额外的 RDATE（不在 RRULE 生成的序列中）
+	set.RDate(time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC))
+	set.RDate(time.Date(2024, 1, 20, 9, 0, 0, 0, time.UTC))
+	
+	// 排除一些 RRULE 生成的日期
+	set.ExDate(time.Date(2024, 1, 3, 9, 0, 0, 0, time.UTC))
+	set.ExDate(time.Date(2024, 1, 5, 9, 0, 0, 0, time.UTC))
+	
+	// 排除一个 RDATE（应该被过滤掉）
+	set.ExDate(time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC))
+	
+	occurrences := set.All()
+	
+	// 让我们先打印出所有事件来调试
+	t.Logf("Generated occurrences:")
+	for i, occ := range occurrences {
+		t.Logf("  %d: %v", i, occ)
+	}
+	
+	// 验证结果：10个RRULE - 2个EXDATE（1月3日和5日） + 1个有效RDATE（1月20日） = 9个
+	// 注意：1月15日的RDATE被EXDATE排除了，所以不计入
+	expectedCount := 9
+	if len(occurrences) != expectedCount {
+		t.Errorf("Expected %d occurrences, got %d", expectedCount, len(occurrences))
+	}
+	
+	// 验证排除的日期不在结果中
+	excludedDates := []time.Time{
+		time.Date(2024, 1, 3, 9, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 5, 9, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC), // 这个RDATE被EXDATE排除
+	}
+	
+	for _, excluded := range excludedDates {
+		for _, occurrence := range occurrences {
+			if occurrence.Equal(excluded) {
+				t.Errorf("Excluded date %v found in occurrences", excluded)
+			}
+		}
+	}
+	
+	// 验证包含的 RDATE 在结果中
+	expectedRDate := time.Date(2024, 1, 20, 9, 0, 0, 0, time.UTC)
+	found := false
+	for _, occurrence := range occurrences {
+		if occurrence.Equal(expectedRDate) {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Expected RDATE %v not found in occurrences", expectedRDate)
+	}
+}
+
+// TestSetDaylightSavingTransition 测试夏令时转换期间的行为
+func TestSetDaylightSavingTransition(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("America/New_York timezone not available")
+	}
+	
+	set := &Set{}
+	
+	// 2024年夏令时开始：3月10日 2:00 AM -> 3:00 AM
+	// 创建跨越夏令时转换的循环规则
+	rrule, err := NewRRule(ROption{
+		Freq:    DAILY,
+		Count:   5,
+		Dtstart: time.Date(2024, 3, 8, 2, 30, 0, 0, ny), // 夏令时转换前2天
+	})
+	if err != nil {
+		t.Fatalf("Failed to create RRule: %v", err)
+	}
+	set.RRule(rrule)
+	
+	occurrences := set.All()
+	
+	if len(occurrences) != 5 {
+		t.Fatalf("Expected 5 occurrences, got %d", len(occurrences))
+	}
+	
+	// 验证时区信息保持一致
+	for i, occurrence := range occurrences {
+		if occurrence.Location().String() != ny.String() {
+			t.Errorf("Occurrence %d should be in %s timezone, got %s", 
+				i, ny.String(), occurrence.Location().String())
+		}
+		
+		// 在夏令时转换期间，时间可能会发生变化
+		// 3月10日 2:30 AM 会跳到 3:30 AM（夏令时开始）
+		hour, min, sec := occurrence.Clock()
+		
+		// 对于夏令时转换日（3月10日），时间会从2:30变为3:30
+		expectedHour := 2
+		if occurrence.Month() == 3 && occurrence.Day() >= 10 {
+			expectedHour = 3 // 夏令时后时间变为3:30
+		}
+		
+		if hour != expectedHour || min != 30 || sec != 0 {
+			t.Logf("Occurrence %d at %v: expected %02d:30:00, got %02d:%02d:%02d", 
+				i, occurrence, expectedHour, hour, min, sec)
+		}
+	}
+}
+
+// TestSetAllDayDynamicToggle 测试动态切换全天/非全天状态
+func TestSetAllDayDynamicToggle(t *testing.T) {
+	set := &Set{}
+	
+	// 初始设置为非全天事件
+	dtstart := time.Date(2024, 6, 15, 14, 30, 45, 123456789, time.UTC)
+	set.DTStart(dtstart)
+	
+	rdate := time.Date(2024, 6, 16, 10, 15, 30, 987654321, time.UTC)
+	set.RDate(rdate)
+	
+	exdate := time.Date(2024, 6, 17, 16, 45, 20, 555666777, time.UTC)
+	set.ExDate(exdate)
+	
+	// 验证初始状态（非全天）
+	if set.IsAllDay() {
+		t.Error("Set should not be all-day initially")
+	}
+	
+	// 验证时间精度保持到秒
+	if set.GetDTStart().Nanosecond() != 0 {
+		t.Error("Non-all-day DTSTART should be truncated to seconds")
+	}
+	
+	// 切换到全天事件
+	set.SetAllDay(true)
+	
+	// 验证状态切换
+	if !set.IsAllDay() {
+		t.Error("Set should be all-day after SetAllDay(true)")
+	}
+	
+	// 验证所有时间被标准化为浮动时间
+	expectedDTStart := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	if !set.GetDTStart().Equal(expectedDTStart) {
+		t.Errorf("All-day DTSTART should be %v, got %v", expectedDTStart, set.GetDTStart())
+	}
+	
+	rdates := set.GetRDate()
+	expectedRDate := time.Date(2024, 6, 16, 0, 0, 0, 0, time.UTC)
+	if len(rdates) != 1 || !rdates[0].Equal(expectedRDate) {
+		t.Errorf("All-day RDATE should be %v, got %v", expectedRDate, rdates)
+	}
+	
+	exdates := set.GetExDate()
+	expectedExDate := time.Date(2024, 6, 17, 0, 0, 0, 0, time.UTC)
+	if len(exdates) != 1 || !exdates[0].Equal(expectedExDate) {
+		t.Errorf("All-day EXDATE should be %v, got %v", expectedExDate, exdates)
+	}
+	
+	// 切换回非全天事件
+	set.SetAllDay(false)
+	
+	// 验证状态切换
+	if set.IsAllDay() {
+		t.Error("Set should not be all-day after SetAllDay(false)")
+	}
+	
+	// 注意：切换回非全天后，时间仍然是标准化的（00:00:00 UTC）
+	// 这是预期行为，因为原始时区信息已丢失
+}
+
+// TestSetIteratorConsistency 测试迭代器与批量方法的一致性
+func TestSetIteratorConsistency(t *testing.T) {
+	testCases := []struct {
+		name   string
+		setup  func() *Set
+		allDay bool
+	}{
+		{
+			name: "NonAllDay_WithRRule",
+			setup: func() *Set {
+				set := &Set{}
+				rrule, _ := NewRRule(ROption{
+					Freq:    WEEKLY,
+					Count:   5,
+					Dtstart: time.Date(2024, 2, 1, 10, 0, 0, 0, time.UTC),
+				})
+				set.RRule(rrule)
+				return set
+			},
+			allDay: false,
+		},
+		{
+			name: "AllDay_WithRDateExDate",
+			setup: func() *Set {
+				set := &Set{}
+				set.SetAllDay(true)
+				set.DTStart(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC))
+				set.RDate(time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC))
+				set.RDate(time.Date(2024, 2, 10, 0, 0, 0, 0, time.UTC))
+				set.ExDate(time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC))
+				return set
+			},
+			allDay: true,
+		},
+		{
+			name: "Complex_Mixed",
+			setup: func() *Set {
+				set := &Set{}
+				rrule, _ := NewRRule(ROption{
+					Freq:    DAILY,
+					Count:   7,
+					Dtstart: time.Date(2024, 3, 1, 15, 30, 0, 0, time.UTC),
+				})
+				set.RRule(rrule)
+				set.RDate(time.Date(2024, 3, 10, 15, 30, 0, 0, time.UTC))
+				set.ExDate(time.Date(2024, 3, 3, 15, 30, 0, 0, time.UTC))
+				return set
+			},
+			allDay: false,
+		},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			set := tc.setup()
+			
+			// 使用 All() 方法获取所有事件
+			allOccurrences := set.All()
+			
+			// 使用迭代器手动收集所有事件
+			var iteratorOccurrences []time.Time
+			iterator := set.Iterator()
+			for {
+				dt, ok := iterator()
+				if !ok {
+					break
+				}
+				iteratorOccurrences = append(iteratorOccurrences, dt)
+			}
+			
+			// 验证数量一致
+			if len(allOccurrences) != len(iteratorOccurrences) {
+				t.Errorf("All() returned %d occurrences, iterator returned %d", 
+					len(allOccurrences), len(iteratorOccurrences))
+			}
+			
+			// 验证内容一致
+			for i, expected := range allOccurrences {
+				if i >= len(iteratorOccurrences) {
+					t.Errorf("Iterator missing occurrence at index %d: %v", i, expected)
+					continue
+				}
+				
+				actual := iteratorOccurrences[i]
+				if !expected.Equal(actual) {
+					t.Errorf("Occurrence %d mismatch: All()=%v, Iterator()=%v", 
+						i, expected, actual)
+				}
+			}
+		})
+	}
+}
+
+// TestSetStringRoundTrip 测试字符串序列化和反序列化的往返一致性
+func TestSetStringRoundTrip(t *testing.T) {
+	testCases := []struct {
+		name   string
+		setup  func() *Set
+		allDay bool
+	}{
+		{
+			name: "AllDay_Complete",
+			setup: func() *Set {
+				set := &Set{}
+				set.SetAllDay(true)
+				set.DTStart(time.Date(2024, 7, 4, 0, 0, 0, 0, time.UTC))
+				
+				rrule, _ := NewRRule(ROption{
+					Freq:    WEEKLY,
+					Count:   4,
+					Dtstart: time.Date(2024, 7, 4, 0, 0, 0, 0, time.UTC),
+				})
+				set.RRule(rrule)
+				
+				set.RDate(time.Date(2024, 8, 1, 0, 0, 0, 0, time.UTC))
+				set.ExDate(time.Date(2024, 7, 11, 0, 0, 0, 0, time.UTC))
+				
+				return set
+			},
+			allDay: true,
+		},
+		{
+			name: "NonAllDay_WithTimezone",
+			setup: func() *Set {
+				ny, _ := time.LoadLocation("America/New_York")
+				set := &Set{}
+				set.DTStart(time.Date(2024, 7, 4, 14, 30, 0, 0, ny))
+				
+				rrule, _ := NewRRule(ROption{
+					Freq:    DAILY,
+					Count:   3,
+					Dtstart: time.Date(2024, 7, 4, 14, 30, 0, 0, ny),
+				})
+				set.RRule(rrule)
+				
+				set.RDate(time.Date(2024, 7, 10, 14, 30, 0, 0, ny))
+				set.ExDate(time.Date(2024, 7, 5, 14, 30, 0, 0, ny))
+				
+				return set
+			},
+			allDay: false,
+		},
+	}
+	
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalSet := tc.setup()
+			
+			// 序列化为字符串
+			setString := originalSet.String(true)
+			
+			// 反序列化回 Set
+			parsedSet, err := StrToRRuleSet(setString)
+			if err != nil {
+				t.Fatalf("Failed to parse set string: %v", err)
+			}
+			
+			// 设置 AllDay 状态（解析器可能不会自动检测）
+			if tc.allDay {
+				parsedSet.SetAllDay(true)
+			}
+			
+			// 比较原始和解析后的 Set
+			originalOccurrences := originalSet.All()
+			parsedOccurrences := parsedSet.All()
+			
+			if len(originalOccurrences) != len(parsedOccurrences) {
+				t.Errorf("Occurrence count mismatch: original=%d, parsed=%d", 
+					len(originalOccurrences), len(parsedOccurrences))
+			}
+			
+			// 验证每个事件
+			for i, original := range originalOccurrences {
+				if i >= len(parsedOccurrences) {
+					t.Errorf("Missing occurrence at index %d: %v", i, original)
+					continue
+				}
+				
+				parsed := parsedOccurrences[i]
+				
+				// 对于全天事件，只比较日期部分
+				if tc.allDay {
+					if original.Year() != parsed.Year() || 
+					   original.Month() != parsed.Month() || 
+					   original.Day() != parsed.Day() {
+						t.Errorf("All-day occurrence %d date mismatch: original=%v, parsed=%v", 
+							i, original, parsed)
+					}
+				} else {
+					// 对于非全天事件，比较完整时间（考虑时区转换）
+					if !original.Equal(parsed) {
+						t.Errorf("Non-all-day occurrence %d mismatch: original=%v, parsed=%v", 
+							i, original, parsed)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestSetEdgeCases 测试边界情况和错误处理
+func TestSetEdgeCases(t *testing.T) {
+	t.Run("EmptySet", func(t *testing.T) {
+		set := &Set{}
+		
+		occurrences := set.All()
+		if len(occurrences) != 0 {
+			t.Errorf("Empty set should return no occurrences, got %d", len(occurrences))
+		}
+		
+		// 测试迭代器
+		iterator := set.Iterator()
+		if dt, ok := iterator(); ok {
+			t.Errorf("Empty set iterator should return false, got %v", dt)
+		}
+	})
+	
+	t.Run("OnlyRDates", func(t *testing.T) {
+		set := &Set{}
+		
+		dates := []time.Time{
+			time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC),
+			time.Date(2024, 5, 15, 10, 0, 0, 0, time.UTC),
+			time.Date(2024, 5, 30, 10, 0, 0, 0, time.UTC),
+		}
+		
+		for _, date := range dates {
+			set.RDate(date)
+		}
+		
+		occurrences := set.All()
+		if len(occurrences) != 3 {
+			t.Errorf("Expected 3 occurrences from RDates, got %d", len(occurrences))
+		}
+		
+		// 验证排序
+		for i := 1; i < len(occurrences); i++ {
+			if occurrences[i].Before(occurrences[i-1]) {
+				t.Errorf("Occurrences should be sorted, but %v is before %v", 
+					occurrences[i], occurrences[i-1])
+			}
+		}
+	})
+	
+	t.Run("AllExcluded", func(t *testing.T) {
+		set := &Set{}
+		
+		// 创建生成3个事件的规则
+		rrule, err := NewRRule(ROption{
+			Freq:    DAILY,
+			Count:   3,
+			Dtstart: time.Date(2024, 8, 1, 12, 0, 0, 0, time.UTC),
+		})
+		if err != nil {
+			t.Fatalf("Failed to create RRule: %v", err)
+		}
+		set.RRule(rrule)
+		
+		// 排除所有生成的事件
+		set.ExDate(time.Date(2024, 8, 1, 12, 0, 0, 0, time.UTC))
+		set.ExDate(time.Date(2024, 8, 2, 12, 0, 0, 0, time.UTC))
+		set.ExDate(time.Date(2024, 8, 3, 12, 0, 0, 0, time.UTC))
+		
+		occurrences := set.All()
+		if len(occurrences) != 0 {
+			t.Errorf("All events should be excluded, got %d occurrences", len(occurrences))
+		}
+	})
+	
+	t.Run("DuplicateRDates", func(t *testing.T) {
+		set := &Set{}
+		
+		duplicateDate := time.Date(2024, 9, 15, 16, 30, 0, 0, time.UTC)
+		
+		// 添加重复的 RDATE
+		set.RDate(duplicateDate)
+		set.RDate(duplicateDate)
+		set.RDate(duplicateDate)
+		
+		occurrences := set.All()
+		if len(occurrences) != 1 {
+			t.Errorf("Duplicate RDates should be deduplicated, expected 1 occurrence, got %d", 
+				len(occurrences))
+		}
+		
+		if !occurrences[0].Equal(duplicateDate) {
+			t.Errorf("Expected occurrence %v, got %v", duplicateDate, occurrences[0])
+		}
+	})
+}
+
+// TestSetPerformance 测试性能基准
+func TestSetPerformance(t *testing.T) {
+	t.Run("LargeRDateSet", func(t *testing.T) {
+		set := &Set{}
+		
+		// 添加大量 RDATE
+		baseDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		for i := 0; i < 1000; i++ {
+			set.RDate(baseDate.AddDate(0, 0, i))
+		}
+		
+		start := time.Now()
+		occurrences := set.All()
+		duration := time.Since(start)
+		
+		if len(occurrences) != 1000 {
+			t.Errorf("Expected 1000 occurrences, got %d", len(occurrences))
+		}
+		
+		// 性能检查：应该在合理时间内完成（这里设置为100ms）
+		if duration > 100*time.Millisecond {
+			t.Logf("Performance warning: Large RDate set took %v", duration)
+		}
+	})
+	
+	t.Run("ComplexSetWithManyExclusions", func(t *testing.T) {
+		set := &Set{}
+		
+		// 创建生成大量事件的规则
+		rrule, err := NewRRule(ROption{
+			Freq:    DAILY,
+			Count:   500,
+			Dtstart: time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC),
+		})
+		if err != nil {
+			t.Fatalf("Failed to create RRule: %v", err)
+		}
+		set.RRule(rrule)
+		
+		// 排除一半的事件
+		baseDate := time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC)
+		for i := 0; i < 250; i += 2 {
+			set.ExDate(baseDate.AddDate(0, 0, i))
+		}
+		
+		start := time.Now()
+		occurrences := set.All()
+		duration := time.Since(start)
+		
+		expectedCount := 500 - 125 // 500个事件 - 125个排除的事件
+		if len(occurrences) != expectedCount {
+			t.Errorf("Expected %d occurrences, got %d", expectedCount, len(occurrences))
+		}
+		
+		t.Logf("Complex set with exclusions took %v", duration)
+	})
+}

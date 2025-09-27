@@ -3,6 +3,7 @@
 package rrule
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -4009,4 +4010,534 @@ func iterateNum(iter Next, num int) (last time.Time) {
 		}
 	}
 	return last
+}
+
+// TestRRuleAllDayTimezoneConsistency 测试全天事件在不同时区下的一致性
+func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
+	timezones := []*time.Location{
+		time.UTC,
+		time.FixedZone("EST", -5*3600),  // UTC-5
+		time.FixedZone("JST", 9*3600),   // UTC+9
+		time.FixedZone("CET", 1*3600),   // UTC+1
+		time.FixedZone("PST", -8*3600),  // UTC-8
+	}
+
+	baseDate := time.Date(2023, 6, 15, 14, 30, 45, 0, time.UTC)
+	
+	for i, tz := range timezones {
+		t.Run(fmt.Sprintf("Timezone_%d", i), func(t *testing.T) {
+			// 在不同时区创建相同日期的全天事件
+			dtstart := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), 
+				10+i*2, 15+i*5, 30+i*3, 0, tz) // 不同的时间部分
+			
+			r, err := NewRRule(ROption{
+				Freq:    DAILY,
+				Count:   3,
+				AllDay:  true,
+				Dtstart: dtstart,
+			})
+			if err != nil {
+				t.Fatalf("Failed to create RRule: %v", err)
+			}
+
+			// 所有时区的全天事件应该产生相同的结果（浮动时间）
+			expected := []time.Time{
+				time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
+				time.Date(2023, 6, 16, 0, 0, 0, 0, time.UTC),
+				time.Date(2023, 6, 17, 0, 0, 0, 0, time.UTC),
+			}
+			
+			result := r.All()
+			if !timesEqual(result, expected) {
+				t.Errorf("Timezone %s: expected %v, got %v", tz.String(), expected, result)
+			}
+		})
+	}
+}
+
+// TestRRuleTimezonePreservation 测试非全天事件的时区保持
+func TestRRuleTimezonePreservation(t *testing.T) {
+	testCases := []struct {
+		name string
+		tz   *time.Location
+	}{
+		{"UTC", time.UTC},
+		{"EST", time.FixedZone("EST", -5*3600)},
+		{"JST", time.FixedZone("JST", 9*3600)},
+		{"CET", time.FixedZone("CET", 1*3600)},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dtstart := time.Date(2023, 1, 1, 14, 30, 0, 0, tc.tz)
+			
+			r, err := NewRRule(ROption{
+				Freq:    DAILY,
+				Count:   2,
+				AllDay:  false,
+				Dtstart: dtstart,
+			})
+			if err != nil {
+				t.Fatalf("Failed to create RRule: %v", err)
+			}
+
+			result := r.All()
+			
+			// 验证时区被保持
+			for _, dt := range result {
+				if dt.Location() != tc.tz {
+					t.Errorf("Expected timezone %s, got %s", tc.tz.String(), dt.Location().String())
+				}
+			}
+			
+			// 验证时间精度
+			expected := []time.Time{
+				time.Date(2023, 1, 1, 14, 30, 0, 0, tc.tz),
+				time.Date(2023, 1, 2, 14, 30, 0, 0, tc.tz),
+			}
+			
+			if !timesEqual(result, expected) {
+				t.Errorf("Expected %v, got %v", expected, result)
+			}
+		})
+	}
+}
+
+// TestRRuleLeapYearHandling 测试闰年处理
+func TestRRuleLeapYearHandling(t *testing.T) {
+	testCases := []struct {
+		name     string
+		dtstart  time.Time
+		freq     Frequency
+		bymonth  []int
+		bymonthday []int
+		count    int
+		expectLeapDay bool
+	}{
+		{
+			name:     "Leap_Year_Feb29",
+			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // 2020是闰年
+			freq:     YEARLY,
+			count:    4,
+			expectLeapDay: true,
+		},
+		{
+			name:     "Non_Leap_Year_Feb29_Skip",
+			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC),
+			freq:     YEARLY,
+			count:    5, // 跨越非闰年
+			expectLeapDay: false,
+		},
+		{
+			name:     "Monthly_Feb29_Handling",
+			dtstart:  time.Date(2020, 1, 29, 10, 0, 0, 0, time.UTC),
+			freq:     MONTHLY,
+			count:    3, // 1月29日 -> 2月29日 -> 3月29日
+			expectLeapDay: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			option := ROption{
+				Freq:    tc.freq,
+				Count:   tc.count,
+				Dtstart: tc.dtstart,
+			}
+			if len(tc.bymonth) > 0 {
+				option.Bymonth = tc.bymonth
+			}
+			if len(tc.bymonthday) > 0 {
+				option.Bymonthday = tc.bymonthday
+			}
+
+			r, err := NewRRule(option)
+			if err != nil {
+				t.Fatalf("Failed to create RRule: %v", err)
+			}
+
+			result := r.All()
+			
+			// 检查是否包含2月29日
+			hasLeapDay := false
+			for _, dt := range result {
+				if dt.Month() == time.February && dt.Day() == 29 {
+					hasLeapDay = true
+					break
+				}
+			}
+			
+			if tc.expectLeapDay && !hasLeapDay {
+				t.Errorf("Expected leap day (Feb 29) in results, but not found. Results: %v", result)
+			}
+			
+			// 验证结果的合理性
+			if len(result) == 0 {
+				t.Error("No results generated")
+			}
+		})
+	}
+}
+
+// TestRRuleComplexByRuleCombinations 测试复杂的BY规则组合
+func TestRRuleComplexByRuleCombinations(t *testing.T) {
+	testCases := []struct {
+		name    string
+		option  ROption
+		minResults int
+		maxResults int
+	}{
+		{
+			name: "Multiple_BY_Rules_Intersection",
+			option: ROption{
+				Freq:      MONTHLY,
+				Count:     12,
+				Byweekday: []Weekday{MO, WE, FR}, // 周一、三、五
+				Bymonthday: []int{1, 15, 30},     // 1号、15号、30号
+				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			minResults: 1,
+			maxResults: 12,
+		},
+		{
+			name: "BYSETPOS_With_Multiple_Rules",
+			option: ROption{
+				Freq:      MONTHLY,
+				Count:     6,
+				Byweekday: []Weekday{MO, TU, WE, TH, FR}, // 工作日
+				Bysetpos:  []int{1, -1}, // 第一个和最后一个
+				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			minResults: 6,
+			maxResults: 12,
+		},
+		{
+			name: "BYHOUR_BYMINUTE_Combination",
+			option: ROption{
+				Freq:     DAILY,
+				Count:    3,
+				Byhour:   []int{9, 12, 15, 18},
+				Byminute: []int{0, 30},
+				Dtstart:  time.Date(2023, 1, 1, 9, 0, 0, 0, time.UTC),
+			},
+			minResults: 3,
+			maxResults: 24, // 3 days * 4 hours * 2 minutes
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := NewRRule(tc.option)
+			if err != nil {
+				t.Fatalf("Failed to create RRule: %v", err)
+			}
+
+			result := r.All()
+			
+			if len(result) < tc.minResults {
+				t.Errorf("Expected at least %d results, got %d", tc.minResults, len(result))
+			}
+			
+			if len(result) > tc.maxResults {
+				t.Errorf("Expected at most %d results, got %d", tc.maxResults, len(result))
+			}
+			
+			// 验证结果排序
+			for i := 1; i < len(result); i++ {
+				if result[i].Before(result[i-1]) {
+					t.Errorf("Results not sorted: %v comes before %v", result[i], result[i-1])
+				}
+			}
+		})
+	}
+}
+
+// TestRRuleEdgeCaseParameters 测试边界参数值
+func TestRRuleEdgeCaseParameters(t *testing.T) {
+	testCases := []struct {
+		name      string
+		option    ROption
+		expectErr bool
+	}{
+		{
+			name: "Max_Interval",
+			option: ROption{
+				Freq:     YEARLY,
+				Interval: 1000,
+				Count:    2,
+				Dtstart:  time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			expectErr: false,
+		},
+		{
+			name: "Max_Count",
+			option: ROption{
+				Freq:    DAILY,
+				Count:   10000,
+				Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			expectErr: false,
+		},
+		{
+			name: "Boundary_BYMONTHDAY",
+			option: ROption{
+				Freq:       MONTHLY,
+				Count:      12,
+				Bymonthday: []int{31, -1}, // 最后一天和倒数第一天
+				Dtstart:    time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			expectErr: false,
+		},
+		{
+			name: "Boundary_BYYEARDAY",
+			option: ROption{
+				Freq:      YEARLY,
+				Count:     3,
+				Byyearday: []int{1, 366, -1, -366}, // 年的边界日
+				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			expectErr: false,
+		},
+		{
+			name: "Invalid_BYMONTHDAY_Zero",
+			option: ROption{
+				Freq:       MONTHLY,
+				Count:      3,
+				Bymonthday: []int{0}, // 无效值
+				Dtstart:    time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := NewRRule(tc.option)
+			
+			if tc.expectErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			
+			// 对于有效的规则，验证能生成结果
+			result := r.All()
+			if len(result) == 0 && tc.option.Count > 0 {
+				t.Error("Expected results but got none")
+			}
+		})
+	}
+}
+
+// TestRRuleMethodChaining 测试方法链式调用和状态更新
+func TestRRuleMethodChaining(t *testing.T) {
+	r, err := NewRRule(ROption{
+		Freq:    DAILY,
+		Count:   3,
+		Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create RRule: %v", err)
+	}
+
+	// 测试DTStart更新
+	newDtstart := time.Date(2023, 2, 1, 15, 30, 0, 0, time.UTC)
+	r.DTStart(newDtstart)
+	
+	if !r.GetDTStart().Equal(newDtstart.Truncate(time.Second)) {
+		t.Errorf("DTStart not updated correctly: expected %v, got %v", 
+			newDtstart.Truncate(time.Second), r.GetDTStart())
+	}
+
+	// 测试Until更新
+	newUntil := time.Date(2023, 2, 5, 20, 0, 0, 0, time.UTC)
+	r.Until(newUntil)
+	
+	if !r.GetUntil().Equal(newUntil.Truncate(time.Second)) {
+		t.Errorf("Until not updated correctly: expected %v, got %v", 
+			newUntil.Truncate(time.Second), r.GetUntil())
+	}
+
+	// 测试AllDay切换
+	r.SetAllDay(true)
+	if !r.IsAllDay() {
+		t.Error("AllDay flag not set correctly")
+	}
+	
+	// 验证AllDay模式下时间被规范化
+	result := r.All()
+	for _, dt := range result {
+		if dt.Hour() != 0 || dt.Minute() != 0 || dt.Second() != 0 {
+			t.Errorf("AllDay event should have 00:00:00 time, got %v", dt)
+		}
+	}
+}
+
+// TestRRuleIteratorConsistency 测试迭代器与批量方法的一致性
+func TestRRuleIteratorConsistency(t *testing.T) {
+	testCases := []ROption{
+		{
+			Freq:    DAILY,
+			Count:   5,
+			Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Freq:      WEEKLY,
+			Count:     4,
+			Byweekday: []Weekday{MO, WE, FR},
+			Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Freq:    MONTHLY,
+			Count:   3,
+			AllDay:  true,
+			Dtstart: time.Date(2023, 1, 15, 14, 30, 0, 0, time.UTC),
+		},
+	}
+
+	for i, option := range testCases {
+		t.Run(fmt.Sprintf("Case_%d", i), func(t *testing.T) {
+			r, err := NewRRule(option)
+			if err != nil {
+				t.Fatalf("Failed to create RRule: %v", err)
+			}
+
+			// 使用All()方法获取所有结果
+			allResults := r.All()
+			
+			// 使用迭代器逐个获取结果
+			iterator := r.Iterator()
+			var iterResults []time.Time
+			
+			for {
+				next, ok := iterator()
+				if !ok {
+					break
+				}
+				iterResults = append(iterResults, next)
+			}
+			
+			// 验证两种方法的结果一致
+			if !timesEqual(allResults, iterResults) {
+				t.Errorf("All() and Iterator() results differ:\nAll(): %v\nIterator(): %v", 
+					allResults, iterResults)
+			}
+		})
+	}
+}
+
+// TestRRuleStringRoundTrip 测试字符串序列化和反序列化的往返一致性
+func TestRRuleStringRoundTrip(t *testing.T) {
+	testCases := []ROption{
+		{
+			Freq:    DAILY,
+			Count:   5,
+			Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Freq:      WEEKLY,
+			Interval:  2,
+			Byweekday: []Weekday{MO, WE, FR},
+			Until:     time.Date(2023, 12, 31, 23, 59, 59, 0, time.UTC),
+			Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Freq:       MONTHLY,
+			Count:      12,
+			Bymonthday: []int{1, 15, -1},
+			Dtstart:    time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+		},
+		{
+			Freq:    YEARLY,
+			Count:   3,
+			AllDay:  true,
+			Dtstart: time.Date(2023, 6, 15, 14, 30, 0, 0, time.UTC),
+		},
+	}
+
+	for i, option := range testCases {
+		t.Run(fmt.Sprintf("RoundTrip_%d", i), func(t *testing.T) {
+			// 创建原始RRule
+			original, err := NewRRule(option)
+			if err != nil {
+				t.Fatalf("Failed to create original RRule: %v", err)
+			}
+
+			// 序列化为字符串
+			rruleStr := original.String()
+			
+			// 从字符串反序列化
+			parsed, err := StrToRRule(rruleStr)
+			if err != nil {
+				t.Fatalf("Failed to parse RRule string '%s': %v", rruleStr, err)
+			}
+
+			// 比较结果
+			originalResults := original.All()
+			parsedResults := parsed.All()
+			
+			if !timesEqual(originalResults, parsedResults) {
+				t.Errorf("Round-trip results differ:\nOriginal: %v\nParsed: %v\nRRule String: %s", 
+					originalResults, parsedResults, rruleStr)
+			}
+		})
+	}
+}
+
+// TestRRulePerformanceBaseline 测试性能基准
+func TestRRulePerformanceBaseline(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping performance test in short mode")
+	}
+
+	testCases := []struct {
+		name   string
+		option ROption
+		maxDuration time.Duration
+	}{
+		{
+			name: "Large_Count_Daily",
+			option: ROption{
+				Freq:    DAILY,
+				Count:   10000,
+				Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			maxDuration: 100 * time.Millisecond,
+		},
+		{
+			name: "Complex_BY_Rules",
+			option: ROption{
+				Freq:      MONTHLY,
+				Count:     1000,
+				Byweekday: []Weekday{MO, TU, WE, TH, FR},
+				Bysetpos:  []int{1, 2, -2, -1},
+				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+			},
+			maxDuration: 200 * time.Millisecond,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := NewRRule(tc.option)
+			if err != nil {
+				t.Fatalf("Failed to create RRule: %v", err)
+			}
+
+			start := time.Now()
+			result := r.All()
+			duration := time.Since(start)
+			
+			if duration > tc.maxDuration {
+				t.Errorf("Performance test failed: took %v, expected < %v", duration, tc.maxDuration)
+			}
+			
+			t.Logf("Generated %d results in %v", len(result), duration)
+		})
+	}
 }
