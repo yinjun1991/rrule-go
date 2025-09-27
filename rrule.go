@@ -17,8 +17,8 @@ type RRule struct {
 	dtstart                 time.Time
 	interval                int
 	wkst                    int
-	count                   int
-	until                   time.Time
+	count                   int       // 初始值为 0 表示不限制 count
+	until                   time.Time // zero time 表示不限制 until
 	bysetpos                []int
 	bymonth                 []int
 	bymonthday, bynmonthday []int

@@ -1,5 +1,3 @@
-// 2017-2022, Teambition. All rights reserved.
-
 package rrule
 
 import (

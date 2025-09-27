@@ -253,7 +253,7 @@ type rIterator struct {
 	ii       iterInfo
 	timeset  []time.Time
 	total    int
-	count    int
+	count    int // 初始值为 0 表示不限制 count
 	remain   reusingRemainSlice
 	finished bool
 	dayset   []optInt
@@ -265,6 +265,7 @@ func (iterator *rIterator) generate() {
 	}
 
 	r := iterator.ii.rrule
+
 	for iterator.remain.Len() == 0 {
 		// Get dayset with the right frequency
 		setStart, setEnd := iterator.ii.calcDaySet(r.freq, iterator.year, iterator.month, iterator.day)
@@ -335,7 +336,7 @@ func (iterator *rIterator) generate() {
 				} else if !res.Before(r.dtstart) {
 					iterator.total++
 					iterator.remain.Append(res)
-					if iterator.count != 0 {
+					if iterator.count > 0 {
 						iterator.count--
 						if iterator.count == 0 {
 							r.len = iterator.total
@@ -364,7 +365,7 @@ func (iterator *rIterator) generate() {
 					} else if !res.Before(r.dtstart) {
 						iterator.total++
 						iterator.remain.Append(res)
-						if iterator.count != 0 {
+						if iterator.count > 0 {
 							iterator.count--
 							if iterator.count == 0 {
 								r.len = iterator.total
