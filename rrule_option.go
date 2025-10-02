@@ -54,7 +54,7 @@ func (option *ROption) String() string {
 
 // RRuleString returns RRULE string exclude DTSTART
 func (option *ROption) RRuleString() string {
-	result := []string{fmt.Sprintf("FREQ=%v", option.Freq)}
+    result := []string{fmt.Sprintf("FREQ=%v", option.Freq)}
 	if option.Interval != 0 {
 		result = append(result, fmt.Sprintf("INTERVAL=%v", option.Interval))
 	}
@@ -76,11 +76,11 @@ func (option *ROption) RRuleString() string {
 			result = append(result, fmt.Sprintf("UNTIL=%v", timeToStr(option.Until)))
 		}
 	}
-	result = appendIntsOption(result, "BYSETPOS", option.Bysetpos)
-	result = appendIntsOption(result, "BYMONTH", option.Bymonth)
-	result = appendIntsOption(result, "BYMONTHDAY", option.Bymonthday)
-	result = appendIntsOption(result, "BYYEARDAY", option.Byyearday)
-	result = appendIntsOption(result, "BYWEEKNO", option.Byweekno)
+    result = appendIntsOption(result, "BYSETPOS", option.Bysetpos)
+    result = appendIntsOption(result, "BYMONTH", option.Bymonth)
+    result = appendIntsOption(result, "BYMONTHDAY", option.Bymonthday)
+    result = appendIntsOption(result, "BYYEARDAY", option.Byyearday)
+    result = appendIntsOption(result, "BYWEEKNO", option.Byweekno)
 	if len(option.Byweekday) != 0 {
 		valueStr := make([]string, len(option.Byweekday))
 		for i, wday := range option.Byweekday {
@@ -88,11 +88,11 @@ func (option *ROption) RRuleString() string {
 		}
 		result = append(result, fmt.Sprintf("BYDAY=%s", strings.Join(valueStr, ",")))
 	}
-	result = appendIntsOption(result, "BYHOUR", option.Byhour)
-	result = appendIntsOption(result, "BYMINUTE", option.Byminute)
-	result = appendIntsOption(result, "BYSECOND", option.Bysecond)
-	result = appendIntsOption(result, "BYEASTER", option.Byeaster)
-	return strings.Join(result, ";")
+    result = appendIntsOption(result, "BYHOUR", option.Byhour)
+    result = appendIntsOption(result, "BYMINUTE", option.Byminute)
+    result = appendIntsOption(result, "BYSECOND", option.Bysecond)
+    result = appendIntsOption(result, "BYEASTER", option.Byeaster)
+    return strings.Join(result, ";")
 }
 
 // StrToROption converts string to ROption.

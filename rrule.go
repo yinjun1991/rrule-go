@@ -132,42 +132,42 @@ func buildRRule(arg ROption) RRule {
 			r.bynweekday = append(r.bynweekday, wday)
 		}
 	}
-	if len(arg.Byhour) == 0 {
-		if r.freq < HOURLY {
-			if arg.AllDay {
-				// All-day events should have hour set to 0
-				r.byhour = []int{0}
-			} else {
-				r.byhour = []int{r.dtstart.Hour()}
-			}
-		}
-	} else {
-		r.byhour = arg.Byhour
-	}
-	if len(arg.Byminute) == 0 {
-		if r.freq < MINUTELY {
-			if arg.AllDay {
-				// All-day events should have minute set to 0
-				r.byminute = []int{0}
-			} else {
-				r.byminute = []int{r.dtstart.Minute()}
-			}
-		}
-	} else {
-		r.byminute = arg.Byminute
-	}
-	if len(arg.Bysecond) == 0 {
-		if r.freq < SECONDLY {
-			if arg.AllDay {
-				// All-day events should have second set to 0
-				r.bysecond = []int{0}
-			} else {
-				r.bysecond = []int{r.dtstart.Second()}
-			}
-		}
-	} else {
-		r.bysecond = arg.Bysecond
-	}
+    if len(arg.Byhour) == 0 {
+        if r.freq < HOURLY {
+            if arg.AllDay {
+                // All-day events should have hour set to 0
+                r.byhour = []int{0}
+            } else {
+                r.byhour = []int{r.dtstart.Hour()}
+            }
+        }
+    } else {
+        r.byhour = arg.Byhour
+    }
+    if len(arg.Byminute) == 0 {
+        if r.freq < MINUTELY {
+            if arg.AllDay {
+                // All-day events should have minute set to 0
+                r.byminute = []int{0}
+            } else {
+                r.byminute = []int{r.dtstart.Minute()}
+            }
+        }
+    } else {
+        r.byminute = arg.Byminute
+    }
+    if len(arg.Bysecond) == 0 {
+        if r.freq < SECONDLY {
+            if arg.AllDay {
+                // All-day events should have second set to 0
+                r.bysecond = []int{0}
+            } else {
+                r.bysecond = []int{r.dtstart.Second()}
+            }
+        }
+    } else {
+        r.bysecond = arg.Bysecond
+    }
 
 	// Reset the timeset value
 	r.timeset = nil
