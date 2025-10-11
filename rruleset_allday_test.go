@@ -580,3 +580,144 @@ func TestAllDaySetStringComplex(t *testing.T) {
 		}
 	}
 }
+
+func TestSetRRuleAdoptsAllDayAndNormalizesState(t *testing.T) {
+	loc, _ := time.LoadLocation("America/Los_Angeles")
+	set := &Set{}
+
+	// Pre-populate the set with non-all-day data.
+	dtstart := time.Date(2024, 10, 10, 9, 30, 0, 0, loc)
+	set.DTStart(dtstart)
+	set.RDate(time.Date(2024, 10, 14, 16, 0, 0, 0, loc))
+	set.ExDate(time.Date(2024, 10, 12, 11, 0, 0, 0, loc))
+
+	rrule, err := NewRRule(ROption{
+		Freq:    DAILY,
+		Count:   3,
+		Dtstart: dtstart,
+		AllDay:  true,
+	})
+	if err != nil {
+		t.Fatalf("NewRRule failed: %v", err)
+	}
+
+	set.RRule(rrule)
+
+	if !set.IsAllDay() {
+		t.Fatal("Set should promote to all-day when attaching an all-day rule")
+	}
+	if !set.GetDTStart().Equal(time.Date(2024, 10, 10, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("DTSTART should be normalized to floating midnight, got %v", set.GetDTStart())
+	}
+
+	rdates := set.GetRDate()
+	if len(rdates) != 1 {
+		t.Fatalf("Expected 1 RDATE, got %d", len(rdates))
+	}
+	if !rdates[0].Equal(time.Date(2024, 10, 14, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("RDATE should normalize to floating midnight, got %v", rdates[0])
+	}
+
+	exdates := set.GetExDate()
+	if len(exdates) != 1 {
+		t.Fatalf("Expected 1 EXDATE, got %d", len(exdates))
+	}
+	if !exdates[0].Equal(time.Date(2024, 10, 12, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("EXDATE should normalize to floating midnight, got %v", exdates[0])
+	}
+
+	// Recurrence output should switch to VALUE=DATE formatting across the board.
+	recurrence := set.Recurrence(true)
+	hasValueDate := func(prefix string) bool {
+		for _, line := range recurrence {
+			if strings.HasPrefix(line, prefix) && strings.Contains(line, "VALUE=DATE") {
+				return true
+			}
+		}
+		return false
+	}
+	if !hasValueDate("DTSTART") {
+		t.Fatalf("Recurrence should emit DTSTART in VALUE=DATE form, got %v", recurrence)
+	}
+	if !hasValueDate("RDATE") {
+		t.Fatalf("Recurrence should emit RDATE in VALUE=DATE form, got %v", recurrence)
+	}
+	if !hasValueDate("EXDATE") {
+		t.Fatalf("Recurrence should emit EXDATE in VALUE=DATE form, got %v", recurrence)
+	}
+
+	// Iterator results should also present floating midnights (hours/minutes/seconds zeroed).
+	all := set.All()
+	if len(all) != 3 {
+		t.Fatalf("Expected 3 unique occurrences (two from RRULE, one RDATE), got %d (%v)", len(all), all)
+	}
+	for _, dt := range all {
+		if dt.Hour() != 0 || dt.Minute() != 0 || dt.Second() != 0 || dt.Location() != time.UTC {
+			t.Fatalf("All-day occurrences should be floating UTC midnight, got %v", dt)
+		}
+	}
+}
+
+func TestStrSliceToRRuleSetDetectsAllDayFromRDate(t *testing.T) {
+	lines := []string{
+		"RDATE;VALUE=DATE:20240301,20240303",
+	}
+
+	set, err := StrSliceToRRuleSetInLoc(lines, time.UTC)
+	if err != nil {
+		t.Fatalf("StrSliceToRRuleSetInLoc failed: %v", err)
+	}
+	if !set.IsAllDay() {
+		t.Fatal("Set should be marked all-day when RDATE uses VALUE=DATE")
+	}
+
+	rdates := set.GetRDate()
+	if len(rdates) != 2 {
+		t.Fatalf("Expected 2 RDATEs, got %d", len(rdates))
+	}
+	want := []time.Time{
+		time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 3, 3, 0, 0, 0, 0, time.UTC),
+	}
+	if !timesEqual(rdates, want) {
+		t.Fatalf("RDATEs were not normalized to floating midnight: %v", rdates)
+	}
+
+	recurrence := set.String(false)
+	if !strings.Contains(recurrence, "RDATE;VALUE=DATE:20240301") ||
+		!strings.Contains(recurrence, "RDATE;VALUE=DATE:20240303") {
+		t.Fatalf("Expected VALUE=DATE serialization, got %q", recurrence)
+	}
+}
+
+func TestStrSliceToRRuleSetDetectsAllDayFromExDate(t *testing.T) {
+	lines := []string{
+		"EXDATE;VALUE=DATE:20250110,20250112",
+	}
+
+	set, err := StrSliceToRRuleSetInLoc(lines, time.UTC)
+	if err != nil {
+		t.Fatalf("StrSliceToRRuleSetInLoc failed: %v", err)
+	}
+	if !set.IsAllDay() {
+		t.Fatal("Set should be marked all-day when EXDATE uses VALUE=DATE")
+	}
+
+	exdates := set.GetExDate()
+	if len(exdates) != 2 {
+		t.Fatalf("Expected 2 EXDATEs, got %d", len(exdates))
+	}
+	want := []time.Time{
+		time.Date(2025, 1, 10, 0, 0, 0, 0, time.UTC),
+		time.Date(2025, 1, 12, 0, 0, 0, 0, time.UTC),
+	}
+	if !timesEqual(exdates, want) {
+		t.Fatalf("EXDATEs were not normalized to floating midnight: %v", exdates)
+	}
+
+	recurrence := set.String(false)
+	if !strings.Contains(recurrence, "EXDATE;VALUE=DATE:20250110") ||
+		!strings.Contains(recurrence, "EXDATE;VALUE=DATE:20250112") {
+		t.Fatalf("Expected VALUE=DATE serialization, got %q", recurrence)
+	}
+}

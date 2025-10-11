@@ -98,16 +98,34 @@ func (set *Set) GetDTStart() time.Time {
 // RRule set the RRULE for set.
 // There is the only one RRULE in the set as https://tools.ietf.org/html/rfc5545#appendix-A.1
 func (set *Set) RRule(rrule *RRule) {
-    // If set is configured as all-day and rule isn't, promote rule to all-day for consistency
-    if set.allDay && !rrule.Options.AllDay {
-        rrule.SetAllDay(true)
-    }
-    if !rrule.Options.Dtstart.IsZero() {
-        set.dtstart = rrule.dtstart
-    } else if !set.dtstart.IsZero() {
-        rrule.DTStart(set.dtstart)
-    }
-    set.rrule = rrule
+	if rrule == nil {
+		return
+	}
+
+	// If we are not yet all-day but the incoming rule is, flip the set first so that
+	// existing dates (DTSTART/RDATE/EXDATE) are normalized before we proceed.
+	if rrule.Options.AllDay && !set.allDay {
+		// Temporarily attach the rule so SetAllDay can update it as well.
+		set.rrule = rrule
+		set.SetAllDay(true)
+	} else if set.allDay && !rrule.Options.AllDay {
+		// Set is already all-day, incoming rule must match to keep comparisons consistent.
+		rrule.SetAllDay(true)
+	}
+
+	// Synchronize DTSTART between the set and the rule.
+	if !rrule.Options.Dtstart.IsZero() {
+		set.dtstart = rrule.dtstart
+		// Ensure floating representation stays normalized after adopting the rule's DTSTART.
+		if set.allDay {
+			year, month, day := set.dtstart.Date()
+			set.dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
+	} else if !set.dtstart.IsZero() {
+		rrule.DTStart(set.dtstart)
+	}
+
+	set.rrule = rrule
 }
 
 // GetRRule returns the rrules in the set
@@ -223,8 +241,8 @@ func (set *Set) SetAllDay(allDay bool) {
 			set.exdate[i] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 		}
 
-		// Update rrule if exists
-		if set.rrule != nil {
+		// Update rrule if exists and we have a concrete DTSTART to mirror
+		if set.rrule != nil && !set.dtstart.IsZero() {
 			set.rrule.DTStart(set.dtstart)
 		}
 	}
@@ -393,25 +411,25 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 	if err != nil {
 		return nil, err
 	}
-    if firstName == "DTSTART" {
-        // Detect all-day (VALUE=DATE) before parsing to ensure normalization
-        dtstartField := ss[0][len(firstName)+1:]
-        if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dtstartField)), "VALUE=DATE:") {
-            // Set as all-day before applying DTStart so normalization uses date semantics
-            set.SetAllDay(true)
-        }
+	if firstName == "DTSTART" {
+		// Detect all-day (VALUE=DATE) before parsing to ensure normalization
+		dtstartField := ss[0][len(firstName)+1:]
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dtstartField)), "VALUE=DATE:") {
+			// Set as all-day before applying DTStart so normalization uses date semantics
+			set.SetAllDay(true)
+		}
 
-        dt, err := StrToDtStart(dtstartField, defaultLoc)
-        if err != nil {
-            return nil, fmt.Errorf("StrToDtStart failed: %v", err)
-        }
-        // default location should be taken from DTSTART property to correctly
-        // parse local times met in RDATE,EXDATE and other rules
-        defaultLoc = dt.Location()
-        set.DTStart(dt)
-        // We've processed the first one
-        ss = ss[1:]
-    }
+		dt, err := StrToDtStart(dtstartField, defaultLoc)
+		if err != nil {
+			return nil, fmt.Errorf("StrToDtStart failed: %v", err)
+		}
+		// default location should be taken from DTSTART property to correctly
+		// parse local times met in RDATE,EXDATE and other rules
+		defaultLoc = dt.Location()
+		set.DTStart(dt)
+		// We've processed the first one
+		ss = ss[1:]
+	}
 
 	for _, line := range ss {
 		name, err := processRRuleName(line)
@@ -420,27 +438,31 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 		}
 		rule := line[len(name)+1:]
 
-        switch name {
-        case "RRULE":
-            rOpt, err := StrToROptionInLocation(rule, defaultLoc)
-            if err != nil {
-                return nil, fmt.Errorf("StrToROption failed: %v", err)
-            }
-            r, err := NewRRule(*rOpt)
-            if err != nil {
-                return nil, fmt.Errorf("NewRRule failed: %v", r)
-            }
+		switch name {
+		case "RRULE":
+			rOpt, err := StrToROptionInLocation(rule, defaultLoc)
+			if err != nil {
+				return nil, fmt.Errorf("StrToROption failed: %v", err)
+			}
+			r, err := NewRRule(*rOpt)
+			if err != nil {
+				return nil, fmt.Errorf("NewRRule failed: %v", r)
+			}
 
-            // If set is all-day, propagate flag to rule so UNTIL and times are formatted correctly
-            if set.allDay && !r.Options.AllDay {
-                r.SetAllDay(true)
-            }
-            set.RRule(r)
-        case "RDATE", "EXDATE":
-            ts, err := StrToDatesInLoc(rule, defaultLoc)
-            if err != nil {
-                return nil, fmt.Errorf("strToDates failed: %v", err)
-            }
+			// If set is all-day, propagate flag to rule so UNTIL and times are formatted correctly
+			if set.allDay && !r.Options.AllDay {
+				r.SetAllDay(true)
+			}
+			set.RRule(r)
+		case "RDATE", "EXDATE":
+			if !set.allDay && containsValueDateParam(rule) {
+				set.SetAllDay(true)
+			}
+
+			ts, err := StrToDatesInLoc(rule, defaultLoc)
+			if err != nil {
+				return nil, fmt.Errorf("strToDates failed: %v", err)
+			}
 			for _, t := range ts {
 				if name == "RDATE" {
 					set.RDate(t)
@@ -452,4 +474,18 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 	}
 
 	return &set, nil
+}
+
+func containsValueDateParam(rule string) bool {
+	upper := strings.ToUpper(rule)
+	paramSection := upper
+	if idx := strings.Index(paramSection, ":"); idx != -1 {
+		paramSection = paramSection[:idx]
+	}
+	for _, part := range strings.Split(paramSection, ";") {
+		if strings.TrimSpace(part) == "VALUE=DATE" {
+			return true
+		}
+	}
+	return false
 }

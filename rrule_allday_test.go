@@ -193,8 +193,8 @@ func TestAllDaySetWithRDate(t *testing.T) {
 	want := []time.Time{
 		time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 		time.Date(2023, 1, 8, 0, 0, 0, 0, time.UTC),
-		time.Date(2023, 1, 20, 16, 45, 0, 0, time.UTC), // RDate保持原时间
-		time.Date(2023, 1, 25, 9, 15, 30, 0, time.UTC), // RDate保持原时间
+		time.Date(2023, 1, 20, 0, 0, 0, 0, time.UTC), // RDate normalized to floating midnight
+		time.Date(2023, 1, 25, 0, 0, 0, 0, time.UTC), // RDate normalized to floating midnight
 	}
 	value := set.All()
 	if !timesEqual(value, want) {
@@ -251,7 +251,7 @@ func TestAllDaySetComplex(t *testing.T) {
 
 	want := []time.Time{
 		time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2023, 1, 10, 12, 45, 0, 0, time.UTC), // RDate保持原时间
+		time.Date(2023, 1, 10, 0, 0, 0, 0, time.UTC), // RDate normalized to floating midnight
 		time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC),
 	}
 	value := set.All()
