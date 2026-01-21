@@ -406,7 +406,7 @@ func TestSetStr(t *testing.T) {
 	if len(exDates) != 2 {
 		t.Errorf("Unexpected number of exDates: %v != 2, %v", len(exDates), exDates)
 	}
-	if [2]string{timeToStr(exDates[0]), timeToStr(exDates[1])} != [2]string{"20180525T070000Z", "20180530T130000Z"} {
+	if [2]string{timeToUTCStr(exDates[0]), timeToUTCStr(exDates[1])} != [2]string{"20180525T070000Z", "20180530T130000Z"} {
 		t.Errorf("Unexpected exDates: %v", exDates)
 	}
 
@@ -415,14 +415,14 @@ func TestSetStr(t *testing.T) {
 	if len(rDates) != 2 {
 		t.Errorf("Unexpected number of rDates: %v != 2, %v", len(rDates), rDates)
 	}
-	if [2]string{timeToStr(rDates[0]), timeToStr(rDates[1])} != [2]string{"20180801T131313Z", "20180902T141414Z"} {
+	if [2]string{timeToUTCStr(rDates[0]), timeToUTCStr(rDates[1])} != [2]string{"20180801T131313Z", "20180902T141414Z"} {
 		t.Errorf("Unexpected exDates: %v", exDates)
 	}
 }
 
-// TestSetAllDayTimezoneConsistency 测试全天事件在不同时区下的一致性
+// TestSetAllDayTimezoneConsistency tests all-day consistency across timezones.
 func TestSetAllDayTimezoneConsistency(t *testing.T) {
-	// 创建不同时区的时间
+	// Create times in different timezones.
 	utc := time.UTC
 	ny, _ := time.LoadLocation("America/New_York")
 	tokyo, _ := time.LoadLocation("Asia/Tokyo")
@@ -443,19 +443,19 @@ func TestSetAllDayTimezoneConsistency(t *testing.T) {
 			set := &Set{}
 			set.SetAllDay(true)
 
-			// 设置不同时区的 DTSTART
+			// Set DTSTART in different timezones.
 			dtstart := baseTime.In(tc.timezone)
 			set.DTStart(dtstart)
 
-			// 添加不同时区的 RDATE
+			// Add RDATEs in different timezones.
 			rdate := baseTime.AddDate(0, 0, 1).In(tc.timezone)
 			set.RDate(rdate)
 
-			// 添加不同时区的 EXDATE
+			// Add EXDATEs in different timezones.
 			exdate := baseTime.AddDate(0, 0, 2).In(tc.timezone)
 			set.ExDate(exdate)
 
-			// 验证所有时间都被标准化为浮动时间（UTC 00:00:00）
+			// Verify all times normalize to floating time (UTC 00:00:00).
 			if set.GetDTStart().Location() != utc {
 				t.Errorf("DTSTART should be in UTC, got %v", set.GetDTStart().Location())
 			}
@@ -465,7 +465,7 @@ func TestSetAllDayTimezoneConsistency(t *testing.T) {
 				t.Errorf("DTSTART should be %v, got %v", expectedDate, set.GetDTStart())
 			}
 
-			// 验证 RDATE 标准化
+			// Verify RDATE normalization.
 			rdates := set.GetRDate()
 			if len(rdates) != 1 {
 				t.Fatalf("Expected 1 RDATE, got %d", len(rdates))
@@ -475,7 +475,7 @@ func TestSetAllDayTimezoneConsistency(t *testing.T) {
 				t.Errorf("RDATE should be %v, got %v", expectedRDate, rdates[0])
 			}
 
-			// 验证 EXDATE 标准化
+			// Verify EXDATE normalization.
 			exdates := set.GetExDate()
 			if len(exdates) != 1 {
 				t.Fatalf("Expected 1 EXDATE, got %d", len(exdates))
@@ -488,11 +488,11 @@ func TestSetAllDayTimezoneConsistency(t *testing.T) {
 	}
 }
 
-// TestSetComplexRRuleRDateExDateInteraction 测试复杂的 RRULE + RDATE + EXDATE 交互
+// TestSetComplexRRuleRDateExDateInteraction tests complex RRULE + RDATE + EXDATE interaction.
 func TestSetComplexRRuleRDateExDateInteraction(t *testing.T) {
 	set := &Set{}
 
-	// 创建每日循环规则
+	// Create a daily recurrence rule.
 	rrule, err := NewRRule(ROption{
 		Freq:    DAILY,
 		Count:   10,
@@ -503,37 +503,37 @@ func TestSetComplexRRuleRDateExDateInteraction(t *testing.T) {
 	}
 	set.RRule(rrule)
 
-	// 添加额外的 RDATE（不在 RRULE 生成的序列中）
+	// Add extra RDATEs (outside the RRULE sequence).
 	set.RDate(time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC))
 	set.RDate(time.Date(2024, 1, 20, 9, 0, 0, 0, time.UTC))
 
-	// 排除一些 RRULE 生成的日期
+	// Exclude some RRULE-generated dates.
 	set.ExDate(time.Date(2024, 1, 3, 9, 0, 0, 0, time.UTC))
 	set.ExDate(time.Date(2024, 1, 5, 9, 0, 0, 0, time.UTC))
 
-	// 排除一个 RDATE（应该被过滤掉）
+	// Exclude one RDATE (should be filtered out).
 	set.ExDate(time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC))
 
 	occurrences := set.All()
 
-	// 让我们先打印出所有事件来调试
+	// Log all occurrences for debugging.
 	t.Logf("Generated occurrences:")
 	for i, occ := range occurrences {
 		t.Logf("  %d: %v", i, occ)
 	}
 
-	// 验证结果：10个RRULE - 2个EXDATE（1月3日和5日） + 1个有效RDATE（1月20日） = 9个
-	// 注意：1月15日的RDATE被EXDATE排除了，所以不计入
+	// Verify results: 10 RRULE - 2 EXDATE (Jan 3 and 5) + 1 valid RDATE (Jan 20) = 9.
+	// Note: Jan 15 RDATE is excluded by EXDATE and not counted.
 	expectedCount := 9
 	if len(occurrences) != expectedCount {
 		t.Errorf("Expected %d occurrences, got %d", expectedCount, len(occurrences))
 	}
 
-	// 验证排除的日期不在结果中
+	// Verify excluded dates are not in the results.
 	excludedDates := []time.Time{
 		time.Date(2024, 1, 3, 9, 0, 0, 0, time.UTC),
 		time.Date(2024, 1, 5, 9, 0, 0, 0, time.UTC),
-		time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC), // 这个RDATE被EXDATE排除
+		time.Date(2024, 1, 15, 9, 0, 0, 0, time.UTC), // This RDATE is excluded by EXDATE.
 	}
 
 	for _, excluded := range excludedDates {
@@ -544,7 +544,7 @@ func TestSetComplexRRuleRDateExDateInteraction(t *testing.T) {
 		}
 	}
 
-	// 验证包含的 RDATE 在结果中
+	// Verify the included RDATE is present.
 	expectedRDate := time.Date(2024, 1, 20, 9, 0, 0, 0, time.UTC)
 	found := false
 	for _, occurrence := range occurrences {
@@ -558,7 +558,7 @@ func TestSetComplexRRuleRDateExDateInteraction(t *testing.T) {
 	}
 }
 
-// TestSetDaylightSavingTransition 测试夏令时转换期间的行为
+// TestSetDaylightSavingTransition tests behavior during DST transitions.
 func TestSetDaylightSavingTransition(t *testing.T) {
 	ny, err := time.LoadLocation("America/New_York")
 	if err != nil {
@@ -567,12 +567,12 @@ func TestSetDaylightSavingTransition(t *testing.T) {
 
 	set := &Set{}
 
-	// 2024年夏令时开始：3月10日 2:00 AM -> 3:00 AM
-	// 创建跨越夏令时转换的循环规则
+	// 2024 DST starts: Mar 10, 2:00 AM -> 3:00 AM.
+	// Create a rule that crosses the DST transition.
 	rrule, err := NewRRule(ROption{
 		Freq:    DAILY,
 		Count:   5,
-		Dtstart: time.Date(2024, 3, 8, 2, 30, 0, 0, ny), // 夏令时转换前2天
+		Dtstart: time.Date(2024, 3, 8, 2, 30, 0, 0, ny), // 2 days before the transition.
 	})
 	if err != nil {
 		t.Fatalf("Failed to create RRule: %v", err)
@@ -585,21 +585,21 @@ func TestSetDaylightSavingTransition(t *testing.T) {
 		t.Fatalf("Expected 5 occurrences, got %d", len(occurrences))
 	}
 
-	// 验证时区信息保持一致
+	// Verify timezone is preserved.
 	for i, occurrence := range occurrences {
 		if occurrence.Location().String() != ny.String() {
 			t.Errorf("Occurrence %d should be in %s timezone, got %s",
 				i, ny.String(), occurrence.Location().String())
 		}
 
-		// 在夏令时转换期间，时间可能会发生变化
-		// 3月10日 2:30 AM 会跳到 3:30 AM（夏令时开始）
+		// During DST transition, time may shift.
+		// On Mar 10, 2:30 AM jumps to 3:30 AM (DST starts).
 		hour, min, sec := occurrence.Clock()
 
-		// 对于夏令时转换日（3月10日），时间会从2:30变为3:30
+		// On the DST transition day (Mar 10), time shifts from 2:30 to 3:30.
 		expectedHour := 2
 		if occurrence.Month() == 3 && occurrence.Day() >= 10 {
-			expectedHour = 3 // 夏令时后时间变为3:30
+			expectedHour = 3 // After DST, time becomes 3:30.
 		}
 
 		if hour != expectedHour || min != 30 || sec != 0 {
@@ -609,11 +609,11 @@ func TestSetDaylightSavingTransition(t *testing.T) {
 	}
 }
 
-// TestSetAllDayDynamicToggle 测试动态切换全天/非全天状态
+// TestSetAllDayDynamicToggle tests toggling all-day/timed state dynamically.
 func TestSetAllDayDynamicToggle(t *testing.T) {
 	set := &Set{}
 
-	// 初始设置为非全天事件
+	// Initialize as a timed event.
 	dtstart := time.Date(2024, 6, 15, 14, 30, 45, 123456789, time.UTC)
 	set.DTStart(dtstart)
 
@@ -623,25 +623,25 @@ func TestSetAllDayDynamicToggle(t *testing.T) {
 	exdate := time.Date(2024, 6, 17, 16, 45, 20, 555666777, time.UTC)
 	set.ExDate(exdate)
 
-	// 验证初始状态（非全天）
+	// Verify initial state (timed).
 	if set.IsAllDay() {
 		t.Error("Set should not be all-day initially")
 	}
 
-	// 验证时间精度保持到秒
+	// Verify time precision is truncated to seconds.
 	if set.GetDTStart().Nanosecond() != 0 {
 		t.Error("Non-all-day DTSTART should be truncated to seconds")
 	}
 
-	// 切换到全天事件
+	// Switch to all-day.
 	set.SetAllDay(true)
 
-	// 验证状态切换
+	// Verify state switch.
 	if !set.IsAllDay() {
 		t.Error("Set should be all-day after SetAllDay(true)")
 	}
 
-	// 验证所有时间被标准化为浮动时间
+	// Verify all times are normalized to floating time.
 	expectedDTStart := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
 	if !set.GetDTStart().Equal(expectedDTStart) {
 		t.Errorf("All-day DTSTART should be %v, got %v", expectedDTStart, set.GetDTStart())
@@ -659,19 +659,19 @@ func TestSetAllDayDynamicToggle(t *testing.T) {
 		t.Errorf("All-day EXDATE should be %v, got %v", expectedExDate, exdates)
 	}
 
-	// 切换回非全天事件
+	// Switch back to timed.
 	set.SetAllDay(false)
 
-	// 验证状态切换
+	// Verify state switch.
 	if set.IsAllDay() {
 		t.Error("Set should not be all-day after SetAllDay(false)")
 	}
 
-	// 注意：切换回非全天后，时间仍然是标准化的（00:00:00 UTC）
-	// 这是预期行为，因为原始时区信息已丢失
+	// Note: after switching back, time remains normalized (00:00:00 UTC).
+	// This is expected because the original timezone info is lost.
 }
 
-// TestSetIteratorConsistency 测试迭代器与批量方法的一致性
+// TestSetIteratorConsistency tests iterator vs batch consistency.
 func TestSetIteratorConsistency(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -727,10 +727,10 @@ func TestSetIteratorConsistency(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			set := tc.setup()
 
-			// 使用 All() 方法获取所有事件
+			// Use All() to get all occurrences.
 			allOccurrences := set.All()
 
-			// 使用迭代器手动收集所有事件
+			// Use the iterator to collect all occurrences.
 			var iteratorOccurrences []time.Time
 			iterator := set.Iterator()
 			for {
@@ -741,13 +741,13 @@ func TestSetIteratorConsistency(t *testing.T) {
 				iteratorOccurrences = append(iteratorOccurrences, dt)
 			}
 
-			// 验证数量一致
+			// Verify counts match.
 			if len(allOccurrences) != len(iteratorOccurrences) {
 				t.Errorf("All() returned %d occurrences, iterator returned %d",
 					len(allOccurrences), len(iteratorOccurrences))
 			}
 
-			// 验证内容一致
+			// Verify contents match.
 			for i, expected := range allOccurrences {
 				if i >= len(iteratorOccurrences) {
 					t.Errorf("Iterator missing occurrence at index %d: %v", i, expected)
@@ -764,7 +764,7 @@ func TestSetIteratorConsistency(t *testing.T) {
 	}
 }
 
-// TestSetStringRoundTrip 测试字符串序列化和反序列化的往返一致性
+// TestSetStringRoundTrip tests string round-trip serialization.
 func TestSetStringRoundTrip(t *testing.T) {
 	testCases := []struct {
 		name   string
@@ -819,21 +819,21 @@ func TestSetStringRoundTrip(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			originalSet := tc.setup()
 
-			// 序列化为字符串
+			// Serialize to string.
 			setString := originalSet.String(true)
 
-			// 反序列化回 Set
+			// Parse back into a Set.
 			parsedSet, err := StrToRRuleSet(setString)
 			if err != nil {
 				t.Fatalf("Failed to parse set string: %v", err)
 			}
 
-			// 设置 AllDay 状态（解析器可能不会自动检测）
+			// Set AllDay state (parser may not detect it automatically).
 			if tc.allDay {
 				parsedSet.SetAllDay(true)
 			}
 
-			// 比较原始和解析后的 Set
+			// Compare original and parsed Set.
 			originalOccurrences := originalSet.All()
 			parsedOccurrences := parsedSet.All()
 
@@ -842,7 +842,7 @@ func TestSetStringRoundTrip(t *testing.T) {
 					len(originalOccurrences), len(parsedOccurrences))
 			}
 
-			// 验证每个事件
+			// Verify each occurrence.
 			for i, original := range originalOccurrences {
 				if i >= len(parsedOccurrences) {
 					t.Errorf("Missing occurrence at index %d: %v", i, original)
@@ -851,7 +851,7 @@ func TestSetStringRoundTrip(t *testing.T) {
 
 				parsed := parsedOccurrences[i]
 
-				// 对于全天事件，只比较日期部分
+				// For all-day events, compare the date only.
 				if tc.allDay {
 					if original.Year() != parsed.Year() ||
 						original.Month() != parsed.Month() ||
@@ -860,7 +860,7 @@ func TestSetStringRoundTrip(t *testing.T) {
 							i, original, parsed)
 					}
 				} else {
-					// 对于非全天事件，比较完整时间（考虑时区转换）
+					// For timed events, compare full time (account for timezone conversion).
 					if !original.Equal(parsed) {
 						t.Errorf("Non-all-day occurrence %d mismatch: original=%v, parsed=%v",
 							i, original, parsed)
@@ -871,7 +871,7 @@ func TestSetStringRoundTrip(t *testing.T) {
 	}
 }
 
-// TestSetEdgeCases 测试边界情况和错误处理
+// TestSetEdgeCases tests edge cases and error handling.
 func TestSetEdgeCases(t *testing.T) {
 	t.Run("EmptySet", func(t *testing.T) {
 		set := &Set{}
@@ -881,7 +881,7 @@ func TestSetEdgeCases(t *testing.T) {
 			t.Errorf("Empty set should return no occurrences, got %d", len(occurrences))
 		}
 
-		// 测试迭代器
+		// Test the iterator.
 		iterator := set.Iterator()
 		if dt, ok := iterator(); ok {
 			t.Errorf("Empty set iterator should return false, got %v", dt)
@@ -906,7 +906,7 @@ func TestSetEdgeCases(t *testing.T) {
 			t.Errorf("Expected 3 occurrences from RDates, got %d", len(occurrences))
 		}
 
-		// 验证排序
+		// Verify sorting.
 		for i := 1; i < len(occurrences); i++ {
 			if occurrences[i].Before(occurrences[i-1]) {
 				t.Errorf("Occurrences should be sorted, but %v is before %v",
@@ -918,7 +918,7 @@ func TestSetEdgeCases(t *testing.T) {
 	t.Run("AllExcluded", func(t *testing.T) {
 		set := &Set{}
 
-		// 创建生成3个事件的规则
+		// Create a rule that generates 3 events.
 		rrule, err := NewRRule(ROption{
 			Freq:    DAILY,
 			Count:   3,
@@ -929,7 +929,7 @@ func TestSetEdgeCases(t *testing.T) {
 		}
 		set.RRule(rrule)
 
-		// 排除所有生成的事件
+		// Exclude all generated events.
 		set.ExDate(time.Date(2024, 8, 1, 12, 0, 0, 0, time.UTC))
 		set.ExDate(time.Date(2024, 8, 2, 12, 0, 0, 0, time.UTC))
 		set.ExDate(time.Date(2024, 8, 3, 12, 0, 0, 0, time.UTC))
@@ -945,7 +945,7 @@ func TestSetEdgeCases(t *testing.T) {
 
 		duplicateDate := time.Date(2024, 9, 15, 16, 30, 0, 0, time.UTC)
 
-		// 添加重复的 RDATE
+		// Add duplicate RDATEs.
 		set.RDate(duplicateDate)
 		set.RDate(duplicateDate)
 		set.RDate(duplicateDate)
@@ -962,12 +962,12 @@ func TestSetEdgeCases(t *testing.T) {
 	})
 }
 
-// TestSetPerformance 测试性能基准
+// TestSetPerformance tests performance baseline.
 func TestSetPerformance(t *testing.T) {
 	t.Run("LargeRDateSet", func(t *testing.T) {
 		set := &Set{}
 
-		// 添加大量 RDATE
+		// Add many RDATEs.
 		baseDate := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		for i := 0; i < 1000; i++ {
 			set.RDate(baseDate.AddDate(0, 0, i))
@@ -981,7 +981,7 @@ func TestSetPerformance(t *testing.T) {
 			t.Errorf("Expected 1000 occurrences, got %d", len(occurrences))
 		}
 
-		// 性能检查：应该在合理时间内完成（这里设置为100ms）
+		// Performance check: should complete within a reasonable time (100ms).
 		if duration > 100*time.Millisecond {
 			t.Logf("Performance warning: Large RDate set took %v", duration)
 		}
@@ -990,7 +990,7 @@ func TestSetPerformance(t *testing.T) {
 	t.Run("ComplexSetWithManyExclusions", func(t *testing.T) {
 		set := &Set{}
 
-		// 创建生成大量事件的规则
+		// Create a rule that generates many events.
 		rrule, err := NewRRule(ROption{
 			Freq:    DAILY,
 			Count:   500,
@@ -1001,7 +1001,7 @@ func TestSetPerformance(t *testing.T) {
 		}
 		set.RRule(rrule)
 
-		// 排除一半的事件
+		// Exclude half the events.
 		baseDate := time.Date(2024, 1, 1, 9, 0, 0, 0, time.UTC)
 		for i := 0; i < 250; i += 2 {
 			set.ExDate(baseDate.AddDate(0, 0, i))
@@ -1011,7 +1011,7 @@ func TestSetPerformance(t *testing.T) {
 		occurrences := set.All()
 		duration := time.Since(start)
 
-		expectedCount := 500 - 125 // 500个事件 - 125个排除的事件
+		expectedCount := 500 - 125 // 500 events - 125 excluded events.
 		if len(occurrences) != expectedCount {
 			t.Errorf("Expected %d occurrences, got %d", expectedCount, len(occurrences))
 		}

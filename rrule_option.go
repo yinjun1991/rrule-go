@@ -9,10 +9,12 @@ import (
 )
 
 // ROption offers options to construct a RRule instance.
-// For performance, it is strongly recommended providing explicit ROption.Dtstart, which defaults to `time.Now().UTC().Truncate(time.Second)`.
+// For performance, it is strongly recommended providing explicit ROption.Dtstart.
+// If Dtstart is zero, it defaults to time.Now() in the effective location (Dtstart's location, otherwise Location or UTC).
 type ROption struct {
 	Freq       Frequency
 	Dtstart    time.Time
+	Location   *time.Location // Default timezone for local date-times; falls back to UTC.
 	Interval   int
 	Wkst       Weekday
 	Count      int
@@ -40,16 +42,20 @@ func (option *ROption) String() string {
 		return str
 	}
 
+	dtstart := option.Dtstart
+	if option.Location != nil {
+		dtstart = dtstart.In(option.Location)
+	}
+
 	// Handle AllDay events: use DATE format as per RFC 5545
 	if option.AllDay {
 		// All-day events should use VALUE=DATE format
-		year, month, day := option.Dtstart.Date()
-		dateStr := fmt.Sprintf("%04d%02d%02d", year, int(month), day)
+		dateStr := dtstart.Format(DateFormat)
 		return fmt.Sprintf("DTSTART;VALUE=DATE:%s\nRRULE:%s", dateStr, str)
 	}
 
 	// Non-all-day events use DATE-TIME format
-	return fmt.Sprintf("DTSTART%s\nRRULE:%s", timeToRFCDatetimeStr(option.Dtstart), str)
+	return fmt.Sprintf("DTSTART%s\nRRULE:%s", timeToRFCDatetimeStr(dtstart), str)
 }
 
 // RRuleString returns RRULE string exclude DTSTART
@@ -70,12 +76,16 @@ func (option *ROption) RRuleString() string {
 		// RFC 5545: UNTIL value type must match DTSTART value type
 		// For all-day events (floating time), UNTIL should also use floating time
 		if option.AllDay {
+			loc := option.Location
+			if loc == nil {
+				loc = option.Dtstart.Location()
+			}
+			until := option.Until.In(loc)
 			// For all-day events, use DATE format (no time part) as per RFC 5545
-			// Convert to date at 00:00:00 in UTC to represent floating time
-			floatingTime := time.Date(option.Until.Year(), option.Until.Month(), option.Until.Day(), 0, 0, 0, 0, time.UTC)
-			result = append(result, fmt.Sprintf("UNTIL=%v", floatingTime.Format(DateFormat)))
+			result = append(result, fmt.Sprintf("UNTIL=%v", until.Format(DateFormat)))
 		} else {
-			result = append(result, fmt.Sprintf("UNTIL=%v", timeToStr(option.Until)))
+			// For date-time events, UNTIL is represented in UTC
+			result = append(result, fmt.Sprintf("UNTIL=%v", timeToUTCStr(option.Until)))
 		}
 	}
 	result = appendIntsOption(result, "BYSETPOS", option.Bysetpos)
@@ -103,13 +113,7 @@ func (option *ROption) RRuleString() string {
 
 // StrToROption converts string to ROption.
 func StrToROption(rfcString string) (*ROption, error) {
-	return StrToROptionInLocation(rfcString, time.UTC)
-}
-
-// StrToROptionInLocation is same as StrToROption but in case local
-// time is supplied as date-time/date field (ex. UNTIL), it is parsed
-// as a time in a given location (time zone)
-func StrToROptionInLocation(rfcString string, loc *time.Location) (*ROption, error) {
+	defaultLoc := time.UTC
 	rfcString = strings.TrimSpace(rfcString)
 	strs := strings.Split(rfcString, "\n")
 	var rruleStr, dtstartStr string
@@ -123,7 +127,7 @@ func StrToROptionInLocation(rfcString string, loc *time.Location) (*ROption, err
 		return nil, errors.New("invalid RRULE string")
 	}
 
-	result := ROption{}
+	result := ROption{Location: defaultLoc}
 	freqSet := false
 
 	if dtstartStr != "" {
@@ -141,9 +145,13 @@ func StrToROptionInLocation(rfcString string, loc *time.Location) (*ROption, err
 			result.AllDay = true
 		}
 
-		result.Dtstart, err = StrToDtStart(dtstartValue, loc)
+		result.Dtstart, err = StrToDtStart(dtstartValue, defaultLoc)
 		if err != nil {
 			return nil, fmt.Errorf("StrToDtStart failed: %s", err)
+		}
+		if !result.Dtstart.IsZero() {
+			result.Location = result.Dtstart.Location()
+			defaultLoc = result.Location
 		}
 	}
 
@@ -157,48 +165,55 @@ func StrToROptionInLocation(rfcString string, loc *time.Location) (*ROption, err
 		if len(value) == 0 {
 			return nil, errors.New(key + " option has no value")
 		}
-		var e error
+		var err error
 		switch key {
 		case "FREQ":
-			result.Freq, e = StrToFreq(value)
+			result.Freq, err = StrToFreq(value)
 			freqSet = true
 		case "DTSTART":
-			result.Dtstart, e = strToTimeInLoc(value, loc)
+			result.Dtstart, err = strToTimeInLoc(value, defaultLoc)
 		case "INTERVAL":
-			result.Interval, e = strconv.Atoi(value)
+			result.Interval, err = strconv.Atoi(value)
 		case "WKST":
-			result.Wkst, e = strToWeekday(value)
+			result.Wkst, err = strToWeekday(value)
 		case "COUNT":
-			result.Count, e = strconv.Atoi(value)
+			result.Count, err = strconv.Atoi(value)
 		case "UNTIL":
-			result.Until, e = strToTimeInLoc(value, loc)
+			result.Until, err = strToTimeInLoc(value, defaultLoc)
 		case "BYSETPOS":
-			result.Bysetpos, e = strToInts(value)
+			result.Bysetpos, err = strToInts(value)
 		case "BYMONTH":
-			result.Bymonth, e = strToInts(value)
+			result.Bymonth, err = strToInts(value)
 		case "BYMONTHDAY":
-			result.Bymonthday, e = strToInts(value)
+			result.Bymonthday, err = strToInts(value)
 		case "BYYEARDAY":
-			result.Byyearday, e = strToInts(value)
+			result.Byyearday, err = strToInts(value)
 		case "BYWEEKNO":
-			result.Byweekno, e = strToInts(value)
+			result.Byweekno, err = strToInts(value)
 		case "BYDAY":
-			result.Byweekday, e = strToWeekdays(value)
+			result.Byweekday, err = strToWeekdays(value)
 		case "BYHOUR":
-			result.Byhour, e = strToInts(value)
+			result.Byhour, err = strToInts(value)
 		case "BYMINUTE":
-			result.Byminute, e = strToInts(value)
+			result.Byminute, err = strToInts(value)
 		case "BYSECOND":
-			result.Bysecond, e = strToInts(value)
+			result.Bysecond, err = strToInts(value)
 		case "BYEASTER":
-			result.Byeaster, e = strToInts(value)
+			result.Byeaster, err = strToInts(value)
 		default:
 			return nil, errors.New("unknown RRULE property: " + key)
 		}
-		if e != nil {
-			return nil, e
+		if err != nil {
+			return nil, err
 		}
 	}
+
+	if !result.Dtstart.IsZero() {
+		result.Location = result.Dtstart.Location()
+	} else if result.Location == nil {
+		result.Location = time.UTC
+	}
+
 	if !freqSet {
 		// Per RFC 5545, FREQ is mandatory and supposed to be the first
 		// parameter. We'll just confirm it exists because we do not
@@ -207,4 +222,16 @@ func StrToROptionInLocation(rfcString string, loc *time.Location) (*ROption, err
 		return nil, errors.New("RRULE property FREQ is required")
 	}
 	return &result, nil
+}
+
+func (option *ROption) GetLocation() *time.Location {
+	if option.Location != nil {
+		return option.Location
+	}
+
+	if option.Dtstart.IsZero() {
+		return time.UTC
+	}
+
+	return option.Dtstart.Location()
 }

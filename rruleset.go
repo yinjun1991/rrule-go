@@ -405,6 +405,7 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 	}
 
 	set := Set{}
+	var dtstartLineForRRULE string
 
 	// According to RFC DTSTART is always the first line.
 	firstName, err := processRRuleName(ss[0])
@@ -427,6 +428,13 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 		// parse local times met in RDATE,EXDATE and other rules
 		defaultLoc = dt.Location()
 		set.DTStart(dt)
+		if !set.GetDTStart().IsZero() {
+			if set.allDay {
+				dtstartLineForRRULE = fmt.Sprintf("DTSTART;VALUE=DATE:%s", set.GetDTStart().Format(DateFormat))
+			} else {
+				dtstartLineForRRULE = fmt.Sprintf("DTSTART%s", timeToRFCDatetimeStr(set.GetDTStart()))
+			}
+		}
 		// We've processed the first one
 		ss = ss[1:]
 	}
@@ -440,7 +448,11 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 
 		switch name {
 		case "RRULE":
-			rOpt, err := StrToROptionInLocation(rule, defaultLoc)
+			rruleInput := line
+			if dtstartLineForRRULE != "" {
+				rruleInput = dtstartLineForRRULE + "\n" + line
+			}
+			rOpt, err := StrToROption(rruleInput)
 			if err != nil {
 				return nil, fmt.Errorf("StrToROption failed: %v", err)
 			}

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// TestROptionFrequencies 测试所有频率类型的基本功能
+// TestROptionFrequencies tests basic functionality for all frequency types.
 func TestROptionFrequencies(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -36,7 +36,7 @@ func TestROptionFrequencies(t *testing.T) {
 	}
 }
 
-// TestROptionBasicParameters 测试基本参数
+// TestROptionBasicParameters tests basic parameters.
 func TestROptionBasicParameters(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -75,7 +75,7 @@ func TestROptionBasicParameters(t *testing.T) {
 	}
 }
 
-// TestROptionByRules 测试 BY* 规则
+// TestROptionByRules tests BY* rules.
 func TestROptionByRules(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -134,7 +134,7 @@ func TestROptionByRules(t *testing.T) {
 	}
 }
 
-// TestROptionNonAllDayWithTimezone 测试非全天事件的时区处理
+// TestROptionNonAllDayWithTimezone tests timezone handling for timed events.
 func TestROptionNonAllDayWithTimezone(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -174,17 +174,17 @@ func TestROptionNonAllDayWithTimezone(t *testing.T) {
 			output := option.String()
 			t.Logf("Non-AllDay %s output: %s", tc.name, output)
 
-			// 验证 DTSTART 包含时区信息
+			// Verify DTSTART includes timezone information.
 			if !strings.Contains(output, "DTSTART") {
 				t.Errorf("Expected DTSTART in output for %s", tc.name)
 			}
 
-			// 验证 UNTIL 包含时间部分
+			// Verify UNTIL includes a time component.
 			if !strings.Contains(output, "UNTIL=") {
 				t.Errorf("Expected UNTIL in output for %s", tc.name)
 			}
 
-			// 非全天事件的 UNTIL 应该包含时间部分
+			// Timed-event UNTIL should include a time component.
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				if strings.Contains(line, "UNTIL=") {
@@ -201,7 +201,7 @@ func TestROptionNonAllDayWithTimezone(t *testing.T) {
 	}
 }
 
-// TestROptionStringParsing 测试字符串解析功能
+// TestROptionStringParsing tests string parsing.
 func TestROptionStringParsing(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -298,21 +298,25 @@ func TestROptionStringParsing(t *testing.T) {
 	}
 }
 
-// TestROptionStringParsingInLocation 测试带时区的字符串解析
-func TestROptionStringParsingInLocation(t *testing.T) {
-	estLoc := time.FixedZone("EST", -5*3600)
-	jstLoc := time.FixedZone("JST", 9*3600)
+// TestROptionStringParsingInLocation tests parsing with a timezone.
+func TestROptionStringParsingWithTimezone(t *testing.T) {
+	estLoc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Skip("Skipping timezone test: America/New_York not available")
+	}
+	jstLoc, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		t.Skip("Skipping timezone test: Asia/Tokyo not available")
+	}
 
 	testCases := []struct {
-		name string
-		input string
-		location *time.Location
+		name         string
+		input        string
 		validateFunc func(*testing.T, *ROption)
 	}{
 		{
 			"Local time in EST",
-			"DTSTART:20230601T140000\nRRULE:FREQ=DAILY;COUNT=3",
-			estLoc,
+			"DTSTART;TZID=America/New_York:20230601T140000\nRRULE:FREQ=DAILY;COUNT=3",
 			func(t *testing.T, opt *ROption) {
 				expected := time.Date(2023, 6, 1, 14, 0, 0, 0, estLoc)
 				if !opt.Dtstart.Equal(expected) {
@@ -322,8 +326,7 @@ func TestROptionStringParsingInLocation(t *testing.T) {
 		},
 		{
 			"UNTIL in JST",
-			"RRULE:FREQ=WEEKLY;UNTIL=20231225T090000",
-			jstLoc,
+			"DTSTART;TZID=Asia/Tokyo:20231201T090000\nRRULE:FREQ=WEEKLY;UNTIL=20231225T090000",
 			func(t *testing.T, opt *ROption) {
 				expected := time.Date(2023, 12, 25, 9, 0, 0, 0, jstLoc)
 				if !opt.Until.Equal(expected) {
@@ -335,7 +338,7 @@ func TestROptionStringParsingInLocation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opt, err := StrToROptionInLocation(tc.input, tc.location)
+			opt, err := StrToROption(tc.input)
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
@@ -348,7 +351,7 @@ func TestROptionStringParsingInLocation(t *testing.T) {
 	}
 }
 
-// TestROptionEdgeCases 测试边界情况和错误处理
+// TestROptionEdgeCases tests edge cases and error handling.
 func TestROptionEdgeCases(t *testing.T) {
 	t.Run("Zero values", func(t *testing.T) {
 		option := ROption{Freq: DAILY}
@@ -362,7 +365,7 @@ func TestROptionEdgeCases(t *testing.T) {
 	t.Run("Empty DTSTART", func(t *testing.T) {
 		option := ROption{Freq: WEEKLY, Count: 3}
 		output := option.String()
-		// 当 DTSTART 为零值时，String() 应该只返回 RRuleString()
+		// When DTSTART is zero, String() should return only RRuleString().
 		expected := "FREQ=WEEKLY;COUNT=3"
 		if output != expected {
 			t.Errorf("Expected %s, got: %s", expected, output)
@@ -372,7 +375,7 @@ func TestROptionEdgeCases(t *testing.T) {
 	t.Run("Negative values in BY rules", func(t *testing.T) {
 		option := ROption{
 			Freq: MONTHLY,
-			Bymonthday: []int{-1, -7, 15}, // 负值表示从月末倒数
+			Bymonthday: []int{-1, -7, 15}, // Negative values count from month end.
 		}
 		output := option.RRuleString()
 		expected := "FREQ=MONTHLY;BYMONTHDAY=-1,-7,15"
@@ -398,7 +401,7 @@ func TestROptionEdgeCases(t *testing.T) {
 	})
 }
 
-// TestROptionRoundTrip 测试往返转换的一致性
+// TestROptionRoundTrip tests round-trip consistency.
 func TestROptionRoundTrip(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -438,18 +441,18 @@ func TestROptionRoundTrip(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// 第一步：ROption -> String
+			// Step 1: ROption -> String.
 			originalStr := tc.option.String()
 			t.Logf("Original string: %s", originalStr)
 
-			// 第二步：String -> ROption
+			// Step 2: String -> ROption.
 			parsedOption, err := StrToROption(originalStr)
 			if err != nil {
 				t.Errorf("Failed to parse string: %v", err)
 				return
 			}
 
-			// 第三步：验证关键字段的一致性
+			// Step 3: verify key fields match.
 			if parsedOption.Freq != tc.option.Freq {
 				t.Errorf("Freq mismatch: expected %v, got %v", tc.option.Freq, parsedOption.Freq)
 			}
@@ -462,7 +465,7 @@ func TestROptionRoundTrip(t *testing.T) {
 				t.Errorf("Interval mismatch: expected %d, got %d", tc.option.Interval, parsedOption.Interval)
 			}
 
-			// 对于全天事件，只比较日期部分
+			// For all-day events, compare the date only.
 			if tc.option.AllDay {
 				origY, origM, origD := tc.option.Dtstart.Date()
 				parsedY, parsedM, parsedD := parsedOption.Dtstart.Date()
@@ -471,18 +474,18 @@ func TestROptionRoundTrip(t *testing.T) {
 						origY, origM, origD, parsedY, parsedM, parsedD)
 				}
 			} else if !tc.option.Dtstart.IsZero() {
-				// 对于非全天事件，比较完整的时间（允许一定的时区转换误差）
+				// For timed events, compare full time (allow timezone conversion variance).
 				if !tc.option.Dtstart.Equal(parsedOption.Dtstart) {
 					t.Errorf("Dtstart mismatch: expected %v, got %v", tc.option.Dtstart, parsedOption.Dtstart)
 				}
 			}
 
-			// 第四步：再次序列化，验证字符串的一致性（排除全天事件的时区差异）
+			// Step 4: serialize again and verify string consistency (ignore all-day timezone differences).
 			if !tc.option.AllDay {
 				reparsedStr := parsedOption.String()
 				t.Logf("Reparsed string: %s", reparsedStr)
 
-				// 对于非全天事件，RRULE 部分应该完全一致
+				// For timed events, the RRULE portion should match exactly.
 				origRRule := tc.option.RRuleString()
 				parsedRRule := parsedOption.RRuleString()
 				if origRRule != parsedRRule {
@@ -493,9 +496,9 @@ func TestROptionRoundTrip(t *testing.T) {
 	}
 }
 
-// TestAllDayStringOutput 测试全天事件的String()和RRuleString()输出
+// TestAllDayStringOutput tests String() and RRuleString() output for all-day events.
 func TestAllDayStringOutput(t *testing.T) {
-	// 创建一个全天事件
+	// Create an all-day event.
 	option := ROption{
 		Freq:    DAILY,
 		Count:   3,
@@ -503,23 +506,23 @@ func TestAllDayStringOutput(t *testing.T) {
 		Dtstart: time.Date(2023, 1, 1, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
 	}
 
-	// 测试String()方法输出
+	// Test String() output.
 	t.Run("String() output", func(t *testing.T) {
 		output := option.String()
 		t.Logf("String() output: %s", output)
 
-		// 验证DTSTART是否使用DATE格式（符合RFC 5545规范）
+		// Verify DTSTART uses DATE format (RFC 5545).
 		if !strings.Contains(output, "DTSTART;VALUE=DATE:20230101") {
 			t.Errorf("Expected DTSTART;VALUE=DATE:20230101 in output, got: %s", output)
 		}
 	})
 
-	// 测试RRuleString()方法输出
+	// Test RRuleString() output.
 	t.Run("RRuleString() output", func(t *testing.T) {
 		output := option.RRuleString()
 		t.Logf("RRuleString() output: %s", output)
 
-		// RRuleString不包含DTSTART，只包含RRULE部分
+		// RRuleString omits DTSTART and includes only RRULE.
 		expected := "FREQ=DAILY;COUNT=3"
 		if output != expected {
 			t.Errorf("Expected %s, got: %s", expected, output)
@@ -527,7 +530,7 @@ func TestAllDayStringOutput(t *testing.T) {
 	})
 }
 
-// TestAllDayStringWithTimezone 测试不同时区的全天事件序列化
+// TestAllDayStringWithTimezone tests all-day serialization across timezones.
 func TestAllDayStringWithTimezone(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -551,7 +554,7 @@ func TestAllDayStringWithTimezone(t *testing.T) {
 			output := option.String()
 			t.Logf("Timezone %s output: %s", tc.name, output)
 
-			// 所有时区的全天事件都应该序列化为相同的DATE格式（符合RFC 5545规范）
+			// All-day events should serialize to the same DATE format across timezones (RFC 5545).
 			expectedDTSTART := "DTSTART;VALUE=DATE:20230615"
 			if !strings.Contains(output, expectedDTSTART) {
 				t.Errorf("Expected %s in output for timezone %s, got: %s",
@@ -561,7 +564,7 @@ func TestAllDayStringWithTimezone(t *testing.T) {
 	}
 }
 
-// TestAllDayStringWithUntil 测试全天事件使用 UNTIL 的字符串序列化
+// TestAllDayStringWithUntil tests all-day serialization with UNTIL.
 func TestAllDayStringWithUntil(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -579,7 +582,8 @@ func TestAllDayStringWithUntil(t *testing.T) {
 			name:     "Different timezone UNTIL",
 			dtstart:  time.Date(2023, 4, 10, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
 			until:    time.Date(2023, 4, 20, 8, 15, 0, 0, time.FixedZone("JST", 9*3600)),
-			expected: "UNTIL=20230420",
+			// UNTIL is normalized to the DTSTART location for all-day DATE semantics.
+			expected: "UNTIL=20230419",
 		},
 		{
 			name:     "Cross month UNTIL",
@@ -601,28 +605,28 @@ func TestAllDayStringWithUntil(t *testing.T) {
 			output := option.String()
 			t.Logf("UNTIL test %s output: %s", tc.name, output)
 
-			// 验证 DTSTART 使用 DATE 格式
+			// Verify DTSTART uses DATE format.
 			year, month, day := tc.dtstart.Date()
 			expectedDTSTART := fmt.Sprintf("DTSTART;VALUE=DATE:%04d%02d%02d", year, int(month), day)
 			if !strings.Contains(output, expectedDTSTART) {
 				t.Errorf("Expected %s in output, got: %s", expectedDTSTART, output)
 			}
 
-			// 验证 UNTIL 使用 DATE 格式（符合 RFC 5545 规范）
+			// Verify UNTIL uses DATE format (RFC 5545).
 			if !strings.Contains(output, tc.expected) {
 				t.Errorf("Expected %s in output, got: %s", tc.expected, output)
 			}
 
-			// 验证 UNTIL 不包含时间部分（T 后面跟数字）
+			// Verify UNTIL has no time component (no "T" time).
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				if strings.Contains(line, "UNTIL=") {
-					// 提取 UNTIL 值
+					// Extract UNTIL value.
 					parts := strings.Split(line, "UNTIL=")
 					if len(parts) > 1 {
-						untilValue := strings.Split(parts[1], ";")[0]  // 处理可能的后续参数
-						untilValue = strings.Split(untilValue, " ")[0] // 处理可能的空格
-						// 检查是否包含时间部分（T 后面跟数字）
+						untilValue := strings.Split(parts[1], ";")[0]  // Handle possible trailing params.
+						untilValue = strings.Split(untilValue, " ")[0] // Handle possible whitespace.
+						// Check for a time component (T followed by digits).
 						if strings.Contains(untilValue, "T") {
 							t.Errorf("UNTIL should use DATE format (no time part) for all-day events, got: %s", untilValue)
 						}

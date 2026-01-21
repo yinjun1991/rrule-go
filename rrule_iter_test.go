@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// TestIteratorFrequencyAdvanced 测试高级频率场景：间隔、跨年、跨月等
+// TestIteratorFrequencyAdvanced tests advanced frequency scenarios: intervals, year/month boundaries, etc.
 func TestIteratorFrequencyAdvanced(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -120,7 +120,7 @@ func TestIteratorFrequencyAdvanced(t *testing.T) {
 	}
 }
 
-// TestIteratorBasicFrequencies 测试基本频率的迭代器功能
+// TestIteratorBasicFrequencies tests iterator behavior for basic frequencies.
 func TestIteratorBasicFrequencies(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -234,7 +234,7 @@ func TestIteratorBasicFrequencies(t *testing.T) {
 	}
 }
 
-// TestIteratorByRulesCombinations 测试BY*规则组合
+// TestIteratorByRulesCombinations tests BY* rule combinations.
 func TestIteratorByRulesCombinations(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -247,7 +247,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:    YEARLY,
 				Count:   3,
 				Dtstart: time.Date(2020, 1, 15, 10, 0, 0, 0, time.UTC),
-				Bymonth: []int{6}, // 只在6月
+				Bymonth: []int{6}, // Only in June.
 			},
 			expected: []time.Time{
 				time.Date(2020, 6, 15, 10, 0, 0, 0, time.UTC),
@@ -261,7 +261,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:    YEARLY,
 				Count:   4,
 				Dtstart: time.Date(2020, 1, 15, 10, 0, 0, 0, time.UTC),
-				Bymonth: []int{3, 9}, // 3月和9月
+				Bymonth: []int{3, 9}, // March and September.
 			},
 			expected: []time.Time{
 				time.Date(2020, 3, 15, 10, 0, 0, 0, time.UTC),
@@ -276,10 +276,10 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:      WEEKLY,
 				Count:     3,
 				Dtstart:   time.Date(2020, 1, 6, 10, 0, 0, 0, time.UTC), // Monday
-				Byweekday: []Weekday{FR},                                // 只在周五
+				Byweekday: []Weekday{FR},                                // Only Fridays.
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 10, 10, 0, 0, 0, time.UTC), // 第一个周五
+				time.Date(2020, 1, 10, 10, 0, 0, 0, time.UTC), // First Friday.
 				time.Date(2020, 1, 17, 10, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 24, 10, 0, 0, 0, time.UTC),
 			},
@@ -290,7 +290,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:      WEEKLY,
 				Count:     4,
 				Dtstart:   time.Date(2020, 1, 6, 10, 0, 0, 0, time.UTC), // Monday
-				Byweekday: []Weekday{MO, WE, FR},                        // 周一、周三、周五
+				Byweekday: []Weekday{MO, WE, FR},                        // Mon, Wed, Fri.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 6, 10, 0, 0, 0, time.UTC),  // Monday
@@ -305,7 +305,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:       MONTHLY,
 				Count:      3,
 				Dtstart:    time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Bymonthday: []int{15}, // 每月15日
+				Bymonthday: []int{15}, // 15th of each month.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 15, 10, 0, 0, 0, time.UTC),
@@ -319,11 +319,11 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:       MONTHLY,
 				Count:      3,
 				Dtstart:    time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Bymonthday: []int{-1}, // 每月最后一天
+				Bymonthday: []int{-1}, // Last day of each month.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 31, 10, 0, 0, 0, time.UTC),
-				time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // 闰年2月
+				time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // Leap-year February.
 				time.Date(2020, 3, 31, 10, 0, 0, 0, time.UTC),
 			},
 		},
@@ -333,7 +333,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:    DAILY,
 				Count:   4,
 				Dtstart: time.Date(2020, 1, 1, 8, 0, 0, 0, time.UTC),
-				Byhour:  []int{9, 15}, // 9点和15点
+				Byhour:  []int{9, 15}, // 9:00 and 15:00.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 1, 9, 0, 0, 0, time.UTC),
@@ -348,7 +348,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:     HOURLY,
 				Count:    4,
 				Dtstart:  time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Byminute: []int{15, 45}, // 15分和45分
+				Byminute: []int{15, 45}, // 15 and 45 minutes.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 1, 10, 15, 0, 0, time.UTC),
@@ -363,7 +363,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 				Freq:     MINUTELY,
 				Count:    4,
 				Dtstart:  time.Date(2020, 1, 1, 10, 30, 0, 0, time.UTC),
-				Bysecond: []int{10, 50}, // 10秒和50秒
+				Bysecond: []int{10, 50}, // 10 and 50 seconds.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 1, 10, 30, 10, 0, time.UTC),
@@ -388,7 +388,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 	}
 }
 
-// TestIteratorAllDayEvents 测试全天事件的迭代器
+// TestIteratorAllDayEvents tests the iterator for all-day events.
 func TestIteratorAllDayEvents(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -453,9 +453,9 @@ func TestIteratorAllDayEvents(t *testing.T) {
 	}
 }
 
-// TestIteratorTimezones 测试多时区处理
+// TestIteratorTimezones tests multi-timezone handling.
 func TestIteratorTimezones(t *testing.T) {
-	// 加载时区
+	// Load timezones.
 	nyc, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		t.Skip("Skipping timezone test: America/New_York not available")
@@ -510,7 +510,7 @@ func TestIteratorTimezones(t *testing.T) {
 	}
 }
 
-// TestIteratorByRules 测试 BY* 规则组合
+// TestIteratorByRules tests BY* rule combinations.
 func TestIteratorByRules(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -592,7 +592,7 @@ func TestIteratorByRules(t *testing.T) {
 	}
 }
 
-// TestIteratorBoundaryConditions 测试边界条件
+// TestIteratorBoundaryConditions tests boundary conditions.
 func TestIteratorBoundaryConditions(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -656,7 +656,7 @@ func TestIteratorBoundaryConditions(t *testing.T) {
 	}
 }
 
-// TestIteratorInterval 测试间隔设置
+// TestIteratorInterval tests interval settings.
 func TestIteratorInterval(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -736,7 +736,7 @@ func TestIteratorInterval(t *testing.T) {
 	}
 }
 
-// TestIteratorUntil 测试 UNTIL 限制
+// TestIteratorUntil tests UNTIL limits.
 func TestIteratorUntil(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -787,7 +787,7 @@ func TestIteratorUntil(t *testing.T) {
 	}
 }
 
-// TestIteratorComplexByRules 测试复杂的 BY* 规则组合
+// TestIteratorComplexByRules tests complex BY* rule combinations.
 func TestIteratorComplexByRules(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -842,7 +842,7 @@ func TestIteratorComplexByRules(t *testing.T) {
 	}
 }
 
-// TestIteratorLeapYearAndBoundaries 测试闰年和边界情况
+// TestIteratorLeapYearAndBoundaries tests leap years and boundaries.
 func TestIteratorLeapYearAndBoundaries(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -854,11 +854,11 @@ func TestIteratorLeapYearAndBoundaries(t *testing.T) {
 			opt: ROption{
 				Freq:    YEARLY,
 				Count:   3,
-				Dtstart: time.Date(2020, 2, 29, 12, 0, 0, 0, time.UTC), // 闰年2月29日
+				Dtstart: time.Date(2020, 2, 29, 12, 0, 0, 0, time.UTC), // Leap day.
 			},
 			expected: []time.Time{
 				time.Date(2020, 2, 29, 12, 0, 0, 0, time.UTC),
-				time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), // 下一个闰年
+				time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC), // Next leap year.
 				time.Date(2028, 2, 29, 12, 0, 0, 0, time.UTC),
 			},
 		},
@@ -867,12 +867,12 @@ func TestIteratorLeapYearAndBoundaries(t *testing.T) {
 			opt: ROption{
 				Freq:    MONTHLY,
 				Count:   3,
-				Dtstart: time.Date(2020, 1, 31, 15, 0, 0, 0, time.UTC), // 1月31日
+				Dtstart: time.Date(2020, 1, 31, 15, 0, 0, 0, time.UTC), // Jan 31.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 31, 15, 0, 0, 0, time.UTC),
-				time.Date(2020, 3, 31, 15, 0, 0, 0, time.UTC), // 跳过2月（只有28/29天）
-				time.Date(2020, 5, 31, 15, 0, 0, 0, time.UTC), // 跳过4月（只有30天）
+				time.Date(2020, 3, 31, 15, 0, 0, 0, time.UTC), // Skip February (28/29 days).
+				time.Date(2020, 5, 31, 15, 0, 0, 0, time.UTC), // Skip April (30 days).
 			},
 		},
 		{
@@ -930,7 +930,7 @@ func TestIteratorLeapYearAndBoundaries(t *testing.T) {
 	}
 }
 
-// TestIteratorEdgeCases 测试边缘情况
+// TestIteratorEdgeCases tests edge cases.
 func TestIteratorEdgeCases(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -977,7 +977,7 @@ func TestIteratorEdgeCases(t *testing.T) {
 	}
 }
 
-// TestIteratorAllDayVsTimedEvents 测试全天事件与定时事件的差异
+// TestIteratorAllDayVsTimedEvents tests differences between all-day and timed events.
 func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -993,7 +993,7 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 				AllDay:  true,
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // 全天事件时间被重置为00:00:00
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // All-day events normalize to 00:00:00.
 				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
 			},
@@ -1007,7 +1007,7 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 				AllDay:  false,
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 1, 14, 30, 45, 0, time.UTC), // 保持原始时间
+				time.Date(2020, 1, 1, 14, 30, 45, 0, time.UTC), // Keep original time.
 				time.Date(2020, 1, 2, 14, 30, 45, 0, time.UTC),
 				time.Date(2020, 1, 3, 14, 30, 45, 0, time.UTC),
 			},
@@ -1017,7 +1017,7 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 			opt: ROption{
 				Freq:    DAILY,
 				Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Until:   time.Date(2020, 1, 3, 15, 30, 0, 0, time.UTC), // Until时间也会被重置
+				Until:   time.Date(2020, 1, 3, 15, 30, 0, 0, time.UTC), // UNTIL time is normalized too.
 				AllDay:  true,
 			},
 			expected: []time.Time{
@@ -1035,7 +1035,7 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 				AllDay:  true,
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // 全天事件小时固定为0
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // All-day event hours start at 0.
 				time.Date(2020, 1, 1, 1, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 1, 2, 0, 0, 0, time.UTC),
 			},
@@ -1046,7 +1046,7 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 				Freq:    DAILY,
 				Count:   2,
 				Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Byhour:  []int{9, 15}, // 全天事件应该忽略BYHOUR
+				Byhour:  []int{9, 15}, // All-day events should ignore BYHOUR.
 				AllDay:  true,
 			},
 			expected: []time.Time{
@@ -1070,9 +1070,9 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 	}
 }
 
-// TestIteratorTimezoneHandling 测试多时区处理
+// TestIteratorTimezoneHandling tests multi-timezone handling.
 func TestIteratorTimezoneHandling(t *testing.T) {
-	// 创建不同时区
+	// Create different timezones.
 	utc := time.UTC
 	east, _ := time.LoadLocation("Asia/Shanghai")    // UTC+8
 	west, _ := time.LoadLocation("America/New_York") // UTC-5/-4
@@ -1131,7 +1131,7 @@ func TestIteratorTimezoneHandling(t *testing.T) {
 			expected: []time.Time{
 				time.Date(2020, 1, 1, 22, 0, 0, 0, east),
 				time.Date(2020, 1, 1, 23, 0, 0, 0, east),
-				time.Date(2020, 1, 2, 0, 0, 0, 0, east), // 跨日边界
+				time.Date(2020, 1, 2, 0, 0, 0, 0, east), // Crosses day boundary.
 				time.Date(2020, 1, 2, 1, 0, 0, 0, east),
 				time.Date(2020, 1, 2, 2, 0, 0, 0, east),
 			},
@@ -1142,10 +1142,10 @@ func TestIteratorTimezoneHandling(t *testing.T) {
 				Freq:    DAILY,
 				Count:   2,
 				Dtstart: time.Date(2020, 1, 1, 15, 30, 0, 0, east),
-				AllDay:  true, // 全天事件应该与时区无关
+				AllDay:  true, // All-day events should be timezone-independent.
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 1, 0, 0, 0, 0, utc), // 转换为UTC的00:00
+				time.Date(2020, 1, 1, 0, 0, 0, 0, utc), // Converted to UTC 00:00.
 				time.Date(2020, 1, 2, 0, 0, 0, 0, utc),
 			},
 		},
@@ -1154,12 +1154,12 @@ func TestIteratorTimezoneHandling(t *testing.T) {
 			opt: ROption{
 				Freq:    DAILY,
 				Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, east),
-				Until:   time.Date(2020, 1, 2, 23, 0, 0, 0, utc), // UTC时间，对应东八区次日07:00
+				Until:   time.Date(2020, 1, 2, 23, 0, 0, 0, utc), // UTC time; next day 07:00 in UTC+8.
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 1, 10, 0, 0, 0, east),
 				time.Date(2020, 1, 2, 10, 0, 0, 0, east),
-				// 2020-01-03 10:00 东八区 = 2020-01-03 02:00 UTC，晚于Until时间
+				// 2020-01-03 10:00 UTC+8 = 2020-01-03 02:00 UTC, after the Until time.
 			},
 		},
 	}
@@ -1178,9 +1178,9 @@ func TestIteratorTimezoneHandling(t *testing.T) {
 	}
 }
 
-// TestIteratorPerformance 测试迭代器性能和内存使用
+// TestIteratorPerformance tests iterator performance and memory usage.
 func TestIteratorPerformance(t *testing.T) {
-	// 测试大量迭代的性能
+	// Test performance with many iterations.
 	r, err := NewRRule(ROption{
 		Freq:    DAILY,
 		Count:   1000,
@@ -1195,7 +1195,7 @@ func TestIteratorPerformance(t *testing.T) {
 		t.Errorf("Expected 1000 results, got %d", len(result))
 	}
 
-	// 验证结果的连续性
+	// Verify results are continuous.
 	for i := 1; i < len(result); i++ {
 		expected := result[i-1].AddDate(0, 0, 1)
 		if !result[i].Equal(expected) {
@@ -1205,7 +1205,7 @@ func TestIteratorPerformance(t *testing.T) {
 	}
 }
 
-// TestIteratorNext 测试迭代器的 next() 方法
+// TestIteratorNext tests the iterator's next() method.
 func TestIteratorNext(t *testing.T) {
 	r, err := NewRRule(ROption{
 		Freq:    DAILY,
@@ -1233,14 +1233,14 @@ func TestIteratorNext(t *testing.T) {
 		}
 	}
 
-	// 应该没有更多值
+	// There should be no more values.
 	_, ok := iter()
 	if ok {
 		t.Error("Iterator should have ended")
 	}
 }
 
-// TestIteratorMaxYear 测试最大年份限制
+// TestIteratorMaxYear tests the max year limit.
 func TestIteratorMaxYear(t *testing.T) {
 	r, err := NewRRule(ROption{
 		Freq:    YEARLY,
@@ -1252,7 +1252,7 @@ func TestIteratorMaxYear(t *testing.T) {
 	}
 
 	result := r.All()
-	// 应该在达到 MAXYEAR 时停止
+	// Should stop at MAXYEAR.
 	for _, dt := range result {
 		if dt.Year() > MAXYEAR {
 			t.Errorf("Result year %d exceeds MAXYEAR %d", dt.Year(), MAXYEAR)
@@ -1260,7 +1260,7 @@ func TestIteratorMaxYear(t *testing.T) {
 	}
 }
 
-// TestIteratorErrorAndNegativeCases 测试错误和负面情况
+// TestIteratorErrorAndNegativeCases tests error and negative cases.
 func TestIteratorErrorAndNegativeCases(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -1274,7 +1274,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 				Freq:    YEARLY,
 				Count:   1,
 				Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Bymonth: []int{0}, // 无效月份
+				Bymonth: []int{0}, // Invalid month.
 			},
 			expectError: true,
 		},
@@ -1284,7 +1284,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 				Freq:    YEARLY,
 				Count:   1,
 				Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Bymonth: []int{-1}, // 无效月份
+				Bymonth: []int{-1}, // Invalid month.
 			},
 			expectError: true,
 		},
@@ -1294,7 +1294,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 				Freq:    DAILY,
 				Count:   1,
 				Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Byhour:  []int{-1}, // 无效小时
+				Byhour:  []int{-1}, // Invalid hour.
 			},
 			expectError: true,
 		},
@@ -1304,7 +1304,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 				Freq:     HOURLY,
 				Count:    1,
 				Dtstart:  time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Byminute: []int{-1}, // 无效分钟
+				Byminute: []int{-1}, // Invalid minute.
 			},
 			expectError: true,
 		},
@@ -1314,7 +1314,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 				Freq:     MINUTELY,
 				Count:    1,
 				Dtstart:  time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
-				Bysecond: []int{-1}, // 无效秒数
+				Bysecond: []int{-1}, // Invalid second.
 			},
 			expectError: true,
 		},
@@ -1323,16 +1323,16 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 			opt: ROption{
 				Freq:    DAILY,
 				Dtstart: time.Date(2020, 1, 10, 10, 0, 0, 0, time.UTC),
-				Until:   time.Date(2020, 1, 5, 10, 0, 0, 0, time.UTC), // Until在Dtstart之前
+				Until:   time.Date(2020, 1, 5, 10, 0, 0, 0, time.UTC), // Until is before Dtstart.
 			},
 			expectError: false,
-			expected:    []time.Time{}, // 应该返回空结果
+			expected:    []time.Time{}, // Should return empty results.
 		},
 		{
 			name: "zero_interval",
 			opt: ROption{
 				Freq:     DAILY,
-				Interval: 0, // 会被自动修正为1
+				Interval: 0, // Will be auto-corrected to 1.
 				Count:    1,
 				Dtstart:  time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
@@ -1343,7 +1343,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 			name: "negative_interval",
 			opt: ROption{
 				Freq:     DAILY,
-				Interval: -1, // 无效间隔
+				Interval: -1, // Invalid interval.
 				Count:    1,
 				Dtstart:  time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
@@ -1371,7 +1371,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 	}
 }
 
-// TestIteratorPerformanceAndMemory 测试性能和内存使用
+// TestIteratorPerformanceAndMemory tests performance and memory usage.
 func TestIteratorPerformanceAndMemory(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1417,7 +1417,7 @@ func TestIteratorPerformanceAndMemory(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			start := time.Now()
 
-			// 测试性能
+			// Measure performance.
 			rrule, err := NewRRule(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
@@ -1426,12 +1426,12 @@ func TestIteratorPerformanceAndMemory(t *testing.T) {
 			results := rrule.All()
 			elapsed := time.Since(start)
 
-			// 验证结果数量
+			// Verify result count.
 			if len(results) != tt.count {
 				t.Errorf("Expected %d results, got %d", tt.count, len(results))
 			}
 
-			// 验证性能
+			// Verify performance.
 			if elapsed > tt.maxTime {
 				t.Errorf("Performance test failed: took %v, expected < %v", elapsed, tt.maxTime)
 			}
@@ -1441,7 +1441,7 @@ func TestIteratorPerformanceAndMemory(t *testing.T) {
 	}
 }
 
-// TestIteratorMemoryReuse 测试内存重用机制
+// TestIteratorMemoryReuse tests memory reuse.
 func TestIteratorMemoryReuse(t *testing.T) {
 	opt := ROption{
 		Freq:    DAILY,
@@ -1454,19 +1454,19 @@ func TestIteratorMemoryReuse(t *testing.T) {
 		t.Fatalf("Failed to create RRule: %v", err)
 	}
 
-	// 多次调用All()方法，验证内存重用
+	// Call All() multiple times to verify memory reuse.
 	var results [][]time.Time
 	for i := 0; i < 5; i++ {
 		result := rrule.All()
 		results = append(results, result)
 
-		// 验证结果一致性
+		// Verify result consistency.
 		if len(result) != 100 {
 			t.Errorf("Iteration %d: expected 100 results, got %d", i, len(result))
 		}
 	}
 
-	// 验证所有结果相同
+	// Verify all results match.
 	for i := 1; i < len(results); i++ {
 		if !timesEqual(results[0], results[i]) {
 			t.Errorf("Results differ between iterations 0 and %d", i)
@@ -1474,7 +1474,7 @@ func TestIteratorMemoryReuse(t *testing.T) {
 	}
 }
 
-// TestIteratorConcurrency 测试并发安全性
+// TestIteratorConcurrency tests concurrency safety.
 func TestIteratorConcurrency(t *testing.T) {
 	opt := ROption{
 		Freq:    DAILY,
@@ -1487,7 +1487,7 @@ func TestIteratorConcurrency(t *testing.T) {
 		t.Fatalf("Failed to create RRule: %v", err)
 	}
 
-	// 并发调用All()方法
+	// Call All() concurrently.
 	const numGoroutines = 10
 	results := make([][]time.Time, numGoroutines)
 	done := make(chan int, numGoroutines)
@@ -1499,12 +1499,12 @@ func TestIteratorConcurrency(t *testing.T) {
 		}(i)
 	}
 
-	// 等待所有goroutine完成
+	// Wait for all goroutines to finish.
 	for i := 0; i < numGoroutines; i++ {
 		<-done
 	}
 
-	// 验证所有结果相同
+	// Verify all results match.
 	for i := 1; i < numGoroutines; i++ {
 		if !timesEqual(results[0], results[i]) {
 			t.Errorf("Concurrent results differ between goroutine 0 and %d", i)

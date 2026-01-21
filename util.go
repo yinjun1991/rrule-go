@@ -25,7 +25,7 @@ const (
 	DateFormat = "20060102"
 )
 
-func timeToStr(time time.Time) string {
+func timeToUTCStr(time time.Time) string {
 	return time.UTC().Format(DateTimeFormat)
 }
 

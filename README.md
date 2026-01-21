@@ -2,16 +2,20 @@
 
 Go library for working with recurrence rules for calendar dates.
 
-[![CI](https://github.com/teambition/rrule-go/actions/workflows/ci.yml/badge.svg)](https://github.com/teambition/rrule-go/actions/workflows/ci.yml)
-[![Codecov](https://codecov.io/gh/teambition/rrule-go/master/main/graph/badge.svg)](https://codecov.io/gh/teambition/rrule-go)
-[![CodeQL](https://github.com/teambition/rrule-go/actions/workflows/codeql.yml/badge.svg)](https://github.com/teambition/rrule-go/actions/workflows/codeql.yml)
-[![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/teambition/rrule-go/master/LICENSE)
-[![Go Reference](https://pkg.go.dev/badge/github.com/teambition/rrule-go.svg)](https://pkg.go.dev/github.com/teambition/rrule-go)
+[![CI](https://github.com/yinjun1991/rrule-go/actions/workflows/ci.yml/badge.svg)](https://github.com/yinjun1991/rrule-go/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/yinjun1991/rrule-go/master/main/graph/badge.svg)](https://codecov.io/gh/yinjun1991/rrule-go)
+[![CodeQL](https://github.com/yinjun1991/rrule-go/actions/workflows/codeql.yml/badge.svg)](https://github.com/yinjun1991/rrule-go/actions/workflows/codeql.yml)
+[![License](http://img.shields.io/badge/license-mit-blue.svg?style=flat-square)](https://raw.githubusercontent.com/yinjun1991/rrule-go/master/LICENSE)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yinjun1991/rrule-go.svg)](https://pkg.go.dev/github.com/yinjun1991/rrule-go)
 
 The rrule module offers a complete implementation of the recurrence rules documented in the [iCalendar
-RFC](http://www.ietf.org/rfc/rfc2445.txt). It is a partial port of the rrule module from the excellent [python-dateutil](http://labix.org/python-dateutil/) library.
+RFC](http://www.ietf.org/rfc/rfc2445.txt).
 
-## Demo
+## Fork
+
+This project is forked from https://github.com/teambition/rrule-go.
+
+## Usage
 
 ### rrule.RRule
 
@@ -22,7 +26,7 @@ import (
   "fmt"
   "time"
 
-  "github.com/teambition/rrule-go"
+  "github.com/yinjun1991/rrule-go"
 )
 
 func printTimeSlice(ts []time.Time) {
@@ -171,9 +175,7 @@ func ExampleStrToRRuleSet() {
 }
 ```
 
-For more examples see [python-dateutil](http://labix.org/python-dateutil/) documentation.
-
 ## License
 
-Gear is licensed under the [MIT](https://github.com/teambition/gear/blob/master/LICENSE) license.
-Copyright &copy; 2017-2023 [Teambition](https://www.teambition.com).
+This project is licensed under the [MIT](LICENSE) license.
+Copyright &copy; 2017-2023 Teambition.

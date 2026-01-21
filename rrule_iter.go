@@ -253,7 +253,7 @@ type rIterator struct {
 	ii       iterInfo
 	timeset  []time.Time
 	total    int
-	count    int // 初始值为 0 表示不限制 count
+	count    int // A value of 0 means count is unlimited.
 	remain   reusingRemainSlice
 	finished bool
 	dayset   []optInt

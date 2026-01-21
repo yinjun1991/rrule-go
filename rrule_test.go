@@ -4012,7 +4012,7 @@ func iterateNum(iter Next, num int) (last time.Time) {
 	return last
 }
 
-// TestRRuleAllDayTimezoneConsistency 测试全天事件在不同时区下的一致性
+// TestRRuleAllDayTimezoneConsistency tests all-day consistency across timezones.
 func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
 	timezones := []*time.Location{
 		time.UTC,
@@ -4026,9 +4026,9 @@ func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
 	
 	for i, tz := range timezones {
 		t.Run(fmt.Sprintf("Timezone_%d", i), func(t *testing.T) {
-			// 在不同时区创建相同日期的全天事件
-			dtstart := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(), 
-				10+i*2, 15+i*5, 30+i*3, 0, tz) // 不同的时间部分
+			// Create all-day events on the same date across timezones.
+			dtstart := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(),
+				10+i*2, 15+i*5, 30+i*3, 0, tz) // Varying time components.
 			
 			r, err := NewRRule(ROption{
 				Freq:    DAILY,
@@ -4040,7 +4040,7 @@ func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
 
-			// 所有时区的全天事件应该产生相同的结果（浮动时间）
+			// All-day events should produce the same results across timezones (floating time).
 			expected := []time.Time{
 				time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC),
 				time.Date(2023, 6, 16, 0, 0, 0, 0, time.UTC),
@@ -4055,7 +4055,7 @@ func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
 	}
 }
 
-// TestRRuleTimezonePreservation 测试非全天事件的时区保持
+// TestRRuleTimezonePreservation tests timezone preservation for timed events.
 func TestRRuleTimezonePreservation(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -4083,14 +4083,14 @@ func TestRRuleTimezonePreservation(t *testing.T) {
 
 			result := r.All()
 			
-			// 验证时区被保持
+			// Verify timezone is preserved.
 			for _, dt := range result {
 				if dt.Location() != tc.tz {
 					t.Errorf("Expected timezone %s, got %s", tc.tz.String(), dt.Location().String())
 				}
 			}
 			
-			// 验证时间精度
+			// Verify time precision.
 			expected := []time.Time{
 				time.Date(2023, 1, 1, 14, 30, 0, 0, tc.tz),
 				time.Date(2023, 1, 2, 14, 30, 0, 0, tc.tz),
@@ -4103,7 +4103,7 @@ func TestRRuleTimezonePreservation(t *testing.T) {
 	}
 }
 
-// TestRRuleLeapYearHandling 测试闰年处理
+// TestRRuleLeapYearHandling tests leap year handling.
 func TestRRuleLeapYearHandling(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -4116,7 +4116,7 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 	}{
 		{
 			name:     "Leap_Year_Feb29",
-			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // 2020是闰年
+			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // 2020 is a leap year.
 			freq:     YEARLY,
 			count:    4,
 			expectLeapDay: true,
@@ -4125,14 +4125,14 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 			name:     "Non_Leap_Year_Feb29_Skip",
 			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC),
 			freq:     YEARLY,
-			count:    5, // 跨越非闰年
+			count:    5, // Crosses non-leap years.
 			expectLeapDay: false,
 		},
 		{
 			name:     "Monthly_Feb29_Handling",
 			dtstart:  time.Date(2020, 1, 29, 10, 0, 0, 0, time.UTC),
 			freq:     MONTHLY,
-			count:    3, // 1月29日 -> 2月29日 -> 3月29日
+			count:    3, // Jan 29 -> Feb 29 -> Mar 29.
 			expectLeapDay: true,
 		},
 	}
@@ -4158,7 +4158,7 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 
 			result := r.All()
 			
-			// 检查是否包含2月29日
+			// Check for Feb 29.
 			hasLeapDay := false
 			for _, dt := range result {
 				if dt.Month() == time.February && dt.Day() == 29 {
@@ -4171,7 +4171,7 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 				t.Errorf("Expected leap day (Feb 29) in results, but not found. Results: %v", result)
 			}
 			
-			// 验证结果的合理性
+			// Verify results are non-empty.
 			if len(result) == 0 {
 				t.Error("No results generated")
 			}
@@ -4179,7 +4179,7 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 	}
 }
 
-// TestRRuleComplexByRuleCombinations 测试复杂的BY规则组合
+// TestRRuleComplexByRuleCombinations tests complex BY rule combinations.
 func TestRRuleComplexByRuleCombinations(t *testing.T) {
 	testCases := []struct {
 		name    string
@@ -4192,8 +4192,8 @@ func TestRRuleComplexByRuleCombinations(t *testing.T) {
 			option: ROption{
 				Freq:      MONTHLY,
 				Count:     12,
-				Byweekday: []Weekday{MO, WE, FR}, // 周一、三、五
-				Bymonthday: []int{1, 15, 30},     // 1号、15号、30号
+				Byweekday: []Weekday{MO, WE, FR}, // Mon, Wed, Fri.
+				Bymonthday: []int{1, 15, 30},     // 1st, 15th, 30th.
 				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			minResults: 1,
@@ -4204,8 +4204,8 @@ func TestRRuleComplexByRuleCombinations(t *testing.T) {
 			option: ROption{
 				Freq:      MONTHLY,
 				Count:     6,
-				Byweekday: []Weekday{MO, TU, WE, TH, FR}, // 工作日
-				Bysetpos:  []int{1, -1}, // 第一个和最后一个
+				Byweekday: []Weekday{MO, TU, WE, TH, FR}, // Weekdays.
+				Bysetpos:  []int{1, -1}, // First and last.
 				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			minResults: 6,
@@ -4242,7 +4242,7 @@ func TestRRuleComplexByRuleCombinations(t *testing.T) {
 				t.Errorf("Expected at most %d results, got %d", tc.maxResults, len(result))
 			}
 			
-			// 验证结果排序
+			// Verify results are sorted.
 			for i := 1; i < len(result); i++ {
 				if result[i].Before(result[i-1]) {
 					t.Errorf("Results not sorted: %v comes before %v", result[i], result[i-1])
@@ -4252,7 +4252,7 @@ func TestRRuleComplexByRuleCombinations(t *testing.T) {
 	}
 }
 
-// TestRRuleEdgeCaseParameters 测试边界参数值
+// TestRRuleEdgeCaseParameters tests boundary parameter values.
 func TestRRuleEdgeCaseParameters(t *testing.T) {
 	testCases := []struct {
 		name      string
@@ -4283,7 +4283,7 @@ func TestRRuleEdgeCaseParameters(t *testing.T) {
 			option: ROption{
 				Freq:       MONTHLY,
 				Count:      12,
-				Bymonthday: []int{31, -1}, // 最后一天和倒数第一天
+				Bymonthday: []int{31, -1}, // Last day and second-to-last day.
 				Dtstart:    time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			expectErr: false,
@@ -4293,7 +4293,7 @@ func TestRRuleEdgeCaseParameters(t *testing.T) {
 			option: ROption{
 				Freq:      YEARLY,
 				Count:     3,
-				Byyearday: []int{1, 366, -1, -366}, // 年的边界日
+				Byyearday: []int{1, 366, -1, -366}, // Year boundary days.
 				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			expectErr: false,
@@ -4303,7 +4303,7 @@ func TestRRuleEdgeCaseParameters(t *testing.T) {
 			option: ROption{
 				Freq:       MONTHLY,
 				Count:      3,
-				Bymonthday: []int{0}, // 无效值
+				Bymonthday: []int{0}, // Invalid value.
 				Dtstart:    time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			expectErr: true,
@@ -4325,7 +4325,7 @@ func TestRRuleEdgeCaseParameters(t *testing.T) {
 				t.Fatalf("Unexpected error: %v", err)
 			}
 			
-			// 对于有效的规则，验证能生成结果
+			// For valid rules, verify results are generated.
 			result := r.All()
 			if len(result) == 0 && tc.option.Count > 0 {
 				t.Error("Expected results but got none")
@@ -4334,7 +4334,7 @@ func TestRRuleEdgeCaseParameters(t *testing.T) {
 	}
 }
 
-// TestRRuleMethodChaining 测试方法链式调用和状态更新
+// TestRRuleMethodChaining tests method chaining and state updates.
 func TestRRuleMethodChaining(t *testing.T) {
 	r, err := NewRRule(ROption{
 		Freq:    DAILY,
@@ -4345,7 +4345,7 @@ func TestRRuleMethodChaining(t *testing.T) {
 		t.Fatalf("Failed to create RRule: %v", err)
 	}
 
-	// 测试DTStart更新
+	// Test DTStart update.
 	newDtstart := time.Date(2023, 2, 1, 15, 30, 0, 0, time.UTC)
 	r.DTStart(newDtstart)
 	
@@ -4354,7 +4354,7 @@ func TestRRuleMethodChaining(t *testing.T) {
 			newDtstart.Truncate(time.Second), r.GetDTStart())
 	}
 
-	// 测试Until更新
+	// Test Until update.
 	newUntil := time.Date(2023, 2, 5, 20, 0, 0, 0, time.UTC)
 	r.Until(newUntil)
 	
@@ -4363,13 +4363,13 @@ func TestRRuleMethodChaining(t *testing.T) {
 			newUntil.Truncate(time.Second), r.GetUntil())
 	}
 
-	// 测试AllDay切换
+	// Test AllDay toggle.
 	r.SetAllDay(true)
 	if !r.IsAllDay() {
 		t.Error("AllDay flag not set correctly")
 	}
 	
-	// 验证AllDay模式下时间被规范化
+	// Verify time is normalized in AllDay mode.
 	result := r.All()
 	for _, dt := range result {
 		if dt.Hour() != 0 || dt.Minute() != 0 || dt.Second() != 0 {
@@ -4378,7 +4378,7 @@ func TestRRuleMethodChaining(t *testing.T) {
 	}
 }
 
-// TestRRuleIteratorConsistency 测试迭代器与批量方法的一致性
+// TestRRuleIteratorConsistency tests iterator vs batch method consistency.
 func TestRRuleIteratorConsistency(t *testing.T) {
 	testCases := []ROption{
 		{
@@ -4407,10 +4407,10 @@ func TestRRuleIteratorConsistency(t *testing.T) {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
 
-			// 使用All()方法获取所有结果
+			// Use All() to collect results.
 			allResults := r.All()
 			
-			// 使用迭代器逐个获取结果
+			// Use the iterator to collect results.
 			iterator := r.Iterator()
 			var iterResults []time.Time
 			
@@ -4422,7 +4422,7 @@ func TestRRuleIteratorConsistency(t *testing.T) {
 				iterResults = append(iterResults, next)
 			}
 			
-			// 验证两种方法的结果一致
+			// Verify results match.
 			if !timesEqual(allResults, iterResults) {
 				t.Errorf("All() and Iterator() results differ:\nAll(): %v\nIterator(): %v", 
 					allResults, iterResults)
@@ -4431,7 +4431,7 @@ func TestRRuleIteratorConsistency(t *testing.T) {
 	}
 }
 
-// TestRRuleStringRoundTrip 测试字符串序列化和反序列化的往返一致性
+// TestRRuleStringRoundTrip tests string round-trip serialization.
 func TestRRuleStringRoundTrip(t *testing.T) {
 	testCases := []ROption{
 		{
@@ -4462,22 +4462,22 @@ func TestRRuleStringRoundTrip(t *testing.T) {
 
 	for i, option := range testCases {
 		t.Run(fmt.Sprintf("RoundTrip_%d", i), func(t *testing.T) {
-			// 创建原始RRule
+			// Create the original RRule.
 			original, err := NewRRule(option)
 			if err != nil {
 				t.Fatalf("Failed to create original RRule: %v", err)
 			}
 
-			// 序列化为字符串
+			// Serialize to string.
 			rruleStr := original.String()
 			
-			// 从字符串反序列化
+			// Parse from string.
 			parsed, err := StrToRRule(rruleStr)
 			if err != nil {
 				t.Fatalf("Failed to parse RRule string '%s': %v", rruleStr, err)
 			}
 
-			// 比较结果
+			// Compare results.
 			originalResults := original.All()
 			parsedResults := parsed.All()
 			
@@ -4489,7 +4489,7 @@ func TestRRuleStringRoundTrip(t *testing.T) {
 	}
 }
 
-// TestRRulePerformanceBaseline 测试性能基准
+// TestRRulePerformanceBaseline tests performance baseline.
 func TestRRulePerformanceBaseline(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping performance test in short mode")

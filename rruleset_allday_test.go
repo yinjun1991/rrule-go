@@ -360,7 +360,7 @@ func TestSetAllDay_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestAllDaySetStringWithRDate 测试全天事件 Set 使用 RDATE 的字符串序列化
+// TestAllDaySetStringWithRDate tests all-day Set string serialization with RDATE.
 func TestAllDaySetStringWithRDate(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -409,21 +409,21 @@ func TestAllDaySetStringWithRDate(t *testing.T) {
 			output := set.String(true)
 			t.Logf("RDATE test %s output: %s", tc.name, output)
 
-			// 验证所有期望的字符串都存在
+			// Verify all expected strings are present.
 			for _, expected := range tc.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("Expected %s in output, got: %s", expected, output)
 				}
 			}
 
-			// 验证 RDATE 使用 VALUE=DATE 格式且不包含时间部分
+			// Verify RDATE uses VALUE=DATE format and has no time part.
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				if strings.HasPrefix(line, "RDATE") {
 					if !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("RDATE should use VALUE=DATE format for all-day events, got: %s", line)
 					}
-					// 检查是否包含时间部分（T 后面跟数字）
+					// Check for a time component (T followed by digits).
 					if strings.Contains(line, "T") && !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("RDATE should not contain time part for all-day events, got: %s", line)
 					}
@@ -433,7 +433,7 @@ func TestAllDaySetStringWithRDate(t *testing.T) {
 	}
 }
 
-// TestAllDaySetStringWithExDate 测试全天事件 Set 使用 EXDATE 的字符串序列化
+// TestAllDaySetStringWithExDate tests all-day Set string serialization with EXDATE.
 func TestAllDaySetStringWithExDate(t *testing.T) {
 	testCases := []struct {
 		name     string
@@ -482,21 +482,21 @@ func TestAllDaySetStringWithExDate(t *testing.T) {
 			output := set.String(true)
 			t.Logf("EXDATE test %s output: %s", tc.name, output)
 
-			// 验证所有期望的字符串都存在
+			// Verify all expected strings are present.
 			for _, expected := range tc.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("Expected %s in output, got: %s", expected, output)
 				}
 			}
 
-			// 验证 EXDATE 使用 VALUE=DATE 格式且不包含时间部分
+			// Verify EXDATE uses VALUE=DATE format and has no time part.
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				if strings.HasPrefix(line, "EXDATE") {
 					if !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("EXDATE should use VALUE=DATE format for all-day events, got: %s", line)
 					}
-					// 检查是否包含时间部分（T 后面跟数字）
+					// Check for a time component (T followed by digits).
 					if strings.Contains(line, "T") && !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("EXDATE should not contain time part for all-day events, got: %s", line)
 					}
@@ -506,16 +506,16 @@ func TestAllDaySetStringWithExDate(t *testing.T) {
 	}
 }
 
-// TestAllDaySetStringComplex 测试全天事件 Set 的复合场景（RRULE + RDATE + EXDATE + UNTIL）
+// TestAllDaySetStringComplex tests complex all-day Set scenarios (RRULE + RDATE + EXDATE + UNTIL).
 func TestAllDaySetStringComplex(t *testing.T) {
 	set := &Set{}
 	set.SetAllDay(true)
 
-	// 设置 DTSTART
+	// Set DTSTART.
 	dtstart := time.Date(2023, 9, 1, 14, 30, 0, 0, time.FixedZone("EST", -5*3600))
 	set.DTStart(dtstart)
 
-	// 添加 RRULE with UNTIL
+	// Add RRULE with UNTIL.
 	until := time.Date(2023, 9, 30, 23, 59, 59, 0, time.UTC)
 	rrule, err := NewRRule(ROption{
 		Freq:    WEEKLY,
@@ -528,11 +528,11 @@ func TestAllDaySetStringComplex(t *testing.T) {
 	}
 	set.RRule(rrule)
 
-	// 添加 RDATE
+	// Add RDATE.
 	set.RDate(time.Date(2023, 9, 15, 16, 0, 0, 0, time.FixedZone("JST", 9*3600)))
 	set.RDate(time.Date(2023, 9, 25, 8, 30, 0, 0, time.UTC))
 
-	// 添加 EXDATE
+	// Add EXDATE.
 	set.ExDate(time.Date(2023, 9, 8, 12, 0, 0, 0, time.UTC))
 	set.ExDate(time.Date(2023, 9, 22, 20, 15, 0, 0, time.FixedZone("CET", 1*3600)))
 
@@ -554,7 +554,7 @@ func TestAllDaySetStringComplex(t *testing.T) {
 		}
 	}
 
-	// 验证所有日期相关字段都使用 DATE 格式，不包含时间部分
+	// Verify all date-related fields use DATE format without time parts.
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if (strings.HasPrefix(line, "DTSTART") ||
@@ -564,15 +564,15 @@ func TestAllDaySetStringComplex(t *testing.T) {
 			!strings.Contains(line, "VALUE=DATE") {
 			t.Errorf("Date field should use VALUE=DATE format for all-day events, got: %s", line)
 		}
-		// UNTIL 在 RRULE 中应该使用 DATE 格式（不包含 T）
-		// 检查 UNTIL 是否包含时间部分（T 后面跟数字）
+		// UNTIL in RRULE should use DATE format (no "T").
+		// Check whether UNTIL contains a time component (T followed by digits).
 		if strings.Contains(line, "UNTIL=") {
-			// 提取 UNTIL 值
+			// Extract the UNTIL value.
 			parts := strings.Split(line, "UNTIL=")
 			if len(parts) > 1 {
-				untilValue := strings.Split(parts[1], ";")[0]  // 处理可能的后续参数
-				untilValue = strings.Split(untilValue, " ")[0] // 处理可能的空格
-				// 检查是否包含时间部分（T 后面跟数字）
+				untilValue := strings.Split(parts[1], ";")[0]  // Handle possible trailing params.
+				untilValue = strings.Split(untilValue, " ")[0] // Handle possible whitespace.
+				// Check for a time component (T followed by digits).
 				if strings.Contains(untilValue, "T") {
 					t.Errorf("UNTIL should use DATE format (no time part) for all-day events, got: %s", untilValue)
 				}

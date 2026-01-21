@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// TestAllDayDaily 测试全天事件的每日循环
+// TestAllDayDaily tests daily recurrence for all-day events.
 func TestAllDayDaily(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
@@ -24,7 +24,7 @@ func TestAllDayDaily(t *testing.T) {
 	}
 }
 
-// TestAllDayWeekly 测试全天事件的每周循环
+// TestAllDayWeekly tests weekly recurrence for all-day events.
 func TestAllDayWeekly(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    WEEKLY,
@@ -43,7 +43,7 @@ func TestAllDayWeekly(t *testing.T) {
 	}
 }
 
-// TestAllDayMonthly 测试全天事件的每月循环
+// TestAllDayMonthly tests monthly recurrence for all-day events.
 func TestAllDayMonthly(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    MONTHLY,
@@ -62,7 +62,7 @@ func TestAllDayMonthly(t *testing.T) {
 	}
 }
 
-// TestAllDayYearly 测试全天事件的每年循环
+// TestAllDayYearly tests yearly recurrence for all-day events.
 func TestAllDayYearly(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    YEARLY,
@@ -81,7 +81,7 @@ func TestAllDayYearly(t *testing.T) {
 	}
 }
 
-// TestAllDayWithUntil 测试全天事件的Until边界处理
+// TestAllDayWithUntil tests UNTIL boundary handling for all-day events.
 func TestAllDayWithUntil(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
@@ -100,7 +100,7 @@ func TestAllDayWithUntil(t *testing.T) {
 	}
 }
 
-// TestAllDayWithUntilMidnight 测试全天事件Until为午夜的边界情况
+// TestAllDayWithUntilMidnight tests the midnight UNTIL boundary for all-day events.
 func TestAllDayWithUntilMidnight(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
@@ -119,7 +119,7 @@ func TestAllDayWithUntilMidnight(t *testing.T) {
 	}
 }
 
-// TestAllDayWithCount 测试全天事件的Count计数逻辑
+// TestAllDayWithCount tests COUNT handling for all-day events.
 func TestAllDayWithCount(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    WEEKLY,
@@ -140,9 +140,9 @@ func TestAllDayWithCount(t *testing.T) {
 	}
 }
 
-// TestAllDayDTStartProcessing 测试全天事件DTStart的时间处理
+// TestAllDayDTStartProcessing tests DTStart normalization for all-day events.
 func TestAllDayDTStartProcessing(t *testing.T) {
-	// 测试不同时间的DTStart都应该被规范化为00:00:00
+	// DTStart values at different times should normalize to 00:00:00.
 	testCases := []struct {
 		name    string
 		dtstart time.Time
@@ -173,11 +173,11 @@ func TestAllDayDTStartProcessing(t *testing.T) {
 	}
 }
 
-// TestAllDaySetWithRDate 测试全天事件的Set RDate功能
+// TestAllDaySetWithRDate tests Set RDate for all-day events.
 func TestAllDaySetWithRDate(t *testing.T) {
 	set := Set{}
 
-	// 添加基础规则
+	// Add base rule.
 	r, _ := NewRRule(ROption{
 		Freq:    WEEKLY,
 		Count:   2,
@@ -186,7 +186,7 @@ func TestAllDaySetWithRDate(t *testing.T) {
 	})
 	set.RRule(r)
 
-	// 添加额外日期
+	// Add extra dates.
 	set.RDate(time.Date(2023, 1, 20, 16, 45, 0, 0, time.UTC))
 	set.RDate(time.Date(2023, 1, 25, 9, 15, 30, 0, time.UTC))
 
@@ -202,11 +202,11 @@ func TestAllDaySetWithRDate(t *testing.T) {
 	}
 }
 
-// TestAllDaySetWithExDate 测试全天事件的Set ExDate功能
+// TestAllDaySetWithExDate tests Set ExDate for all-day events.
 func TestAllDaySetWithExDate(t *testing.T) {
 	set := Set{}
 
-	// 添加基础规则
+	// Add base rule.
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
 		Count:   5,
@@ -215,7 +215,7 @@ func TestAllDaySetWithExDate(t *testing.T) {
 	})
 	set.RRule(r)
 
-	// 排除特定日期（需要使用午夜时间来匹配全天事件）
+	// Exclude specific dates (use midnight to match all-day events).
 	set.ExDate(time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC))
 	set.ExDate(time.Date(2023, 1, 4, 0, 0, 0, 0, time.UTC))
 
@@ -230,11 +230,11 @@ func TestAllDaySetWithExDate(t *testing.T) {
 	}
 }
 
-// TestAllDaySetComplex 测试全天事件的复杂Set组合
+// TestAllDaySetComplex tests complex Set combinations for all-day events.
 func TestAllDaySetComplex(t *testing.T) {
 	set := Set{}
 
-	// 添加基础规则
+	// Add base rule.
 	r, _ := NewRRule(ROption{
 		Freq:    WEEKLY,
 		Count:   3,
@@ -243,10 +243,10 @@ func TestAllDaySetComplex(t *testing.T) {
 	})
 	set.RRule(r)
 
-	// 添加额外日期
+	// Add an extra date.
 	set.RDate(time.Date(2023, 1, 10, 12, 45, 0, 0, time.UTC))
 
-	// 排除日期（需要使用午夜时间来匹配全天事件）
+	// Exclude a date (use midnight to match all-day events).
 	set.ExDate(time.Date(2023, 1, 8, 0, 0, 0, 0, time.UTC))
 
 	want := []time.Time{
@@ -260,8 +260,8 @@ func TestAllDaySetComplex(t *testing.T) {
 	}
 }
 
-// TestAllDayTimezoneHandling 测试全天事件的时区处理
-// 根据RFC 5545，全天事件应该使用浮动时间，在所有时区都表示同一天的00:00:00
+// TestAllDayTimezoneHandling tests timezone handling for all-day events.
+// Per RFC 5545, all-day events use floating time and represent 00:00:00 in any timezone.
 func TestAllDayTimezoneHandling(t *testing.T) {
 	testCases := []struct {
 		name string
@@ -282,9 +282,9 @@ func TestAllDayTimezoneHandling(t *testing.T) {
 				Dtstart: time.Date(2023, 1, 1, 15, 30, 0, 0, tc.tz),
 			})
 
-			// 根据RFC 5545浮动时间规范，全天事件应该转换为浮动时间（无时区绑定）
-			// 在Go中，我们用UTC表示浮动时间，因为它不依赖本地时区
-			// 这样确保在任何时区的用户看到的都是同一天的00:00:00
+			// Per RFC 5545, all-day events should convert to floating time (no timezone binding).
+			// In Go we represent floating time with UTC since it is timezone-agnostic.
+			// This ensures users in any timezone see the same day's 00:00:00.
 			want := []time.Time{
 				time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 				time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC),
@@ -297,17 +297,17 @@ func TestAllDayTimezoneHandling(t *testing.T) {
 	}
 }
 
-// TestAllDayLeapYear 测试全天事件的闰年处理
+// TestAllDayLeapYear tests leap year handling for all-day events.
 func TestAllDayLeapYear(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    YEARLY,
 		Count:   4,
 		AllDay:  true,
-		Dtstart: time.Date(2020, 2, 29, 12, 0, 0, 0, time.UTC), // 闰年2月29日
+		Dtstart: time.Date(2020, 2, 29, 12, 0, 0, 0, time.UTC), // Leap day.
 	})
 	want := []time.Time{
 		time.Date(2020, 2, 29, 0, 0, 0, 0, time.UTC),
-		time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC), // 下一个闰年
+		time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC), // Next leap year.
 		time.Date(2028, 2, 29, 0, 0, 0, 0, time.UTC),
 		time.Date(2032, 2, 29, 0, 0, 0, 0, time.UTC),
 	}
@@ -317,7 +317,7 @@ func TestAllDayLeapYear(t *testing.T) {
 	}
 }
 
-// TestAllDayYearBoundary 测试全天事件的跨年边界
+// TestAllDayYearBoundary tests year boundary handling for all-day events.
 func TestAllDayYearBoundary(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
@@ -338,7 +338,7 @@ func TestAllDayYearBoundary(t *testing.T) {
 	}
 }
 
-// TestAllDayMonthBoundary 测试全天事件的跨月边界
+// TestAllDayMonthBoundary tests month boundary handling for all-day events.
 func TestAllDayMonthBoundary(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
@@ -358,7 +358,7 @@ func TestAllDayMonthBoundary(t *testing.T) {
 	}
 }
 
-// TestAllDayIterator 测试全天事件的Iterator方法
+// TestAllDayIterator tests the iterator for all-day events.
 func TestAllDayIterator(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:    DAILY,
@@ -389,7 +389,7 @@ func TestAllDayIterator(t *testing.T) {
 	}
 }
 
-// TestAllDayWithByWeekDay 测试全天事件结合ByWeekDay规则
+// TestAllDayWithByWeekDay tests all-day events with ByWeekday rules.
 func TestAllDayWithByWeekDay(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:      WEEKLY,
@@ -410,7 +410,7 @@ func TestAllDayWithByWeekDay(t *testing.T) {
 	}
 }
 
-// TestAllDayWithByMonthDay 测试全天事件结合ByMonthDay规则
+// TestAllDayWithByMonthDay tests all-day events with ByMonthday rules.
 func TestAllDayWithByMonthDay(t *testing.T) {
 	r, _ := NewRRule(ROption{
 		Freq:       MONTHLY,
@@ -430,9 +430,9 @@ func TestAllDayWithByMonthDay(t *testing.T) {
 	}
 }
 
-// TestAllDayConsistencyWithNonAllDay 测试全天事件与非全天事件的一致性
+// TestAllDayConsistencyWithNonAllDay tests consistency between all-day and timed events.
 func TestAllDayConsistencyWithNonAllDay(t *testing.T) {
-	// 全天事件
+	// All-day event.
 	allDayRule, _ := NewRRule(ROption{
 		Freq:    DAILY,
 		Count:   3,
@@ -440,7 +440,7 @@ func TestAllDayConsistencyWithNonAllDay(t *testing.T) {
 		Dtstart: time.Date(2023, 1, 1, 14, 30, 0, 0, time.UTC),
 	})
 
-	// 非全天事件（相同日期，午夜时间）
+	// Timed event at midnight on the same date.
 	nonAllDayRule, _ := NewRRule(ROption{
 		Freq:    DAILY,
 		Count:   3,
@@ -451,7 +451,7 @@ func TestAllDayConsistencyWithNonAllDay(t *testing.T) {
 	allDayResults := allDayRule.All()
 	nonAllDayResults := nonAllDayRule.All()
 
-	// 全天事件的结果应该与午夜非全天事件的结果相同
+	// All-day results should match timed midnight results.
 	if !timesEqual(allDayResults, nonAllDayResults) {
 		t.Errorf("AllDay results %v should match non-AllDay midnight results %v",
 			allDayResults, nonAllDayResults)

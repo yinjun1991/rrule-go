@@ -139,7 +139,7 @@ func TestSetStrCompatibility(t *testing.T) {
 	if len(exDates) != 2 {
 		t.Errorf("Unexpected number of exDates: %v != 2, %v", len(exDates), exDates)
 	}
-	if [2]string{timeToStr(exDates[0]), timeToStr(exDates[1])} != [2]string{"20180525T070000Z", "20180530T130000Z"} {
+	if [2]string{timeToUTCStr(exDates[0]), timeToUTCStr(exDates[1])} != [2]string{"20180525T070000Z", "20180530T130000Z"} {
 		t.Errorf("Unexpected exDates: %v", exDates)
 	}
 
@@ -148,7 +148,7 @@ func TestSetStrCompatibility(t *testing.T) {
 	if len(rDates) != 2 {
 		t.Errorf("Unexpected number of rDates: %v != 2, %v", len(rDates), rDates)
 	}
-	if [2]string{timeToStr(rDates[0]), timeToStr(rDates[1])} != [2]string{"20180801T131313Z", "20180902T141414Z"} {
+	if [2]string{timeToUTCStr(rDates[0]), timeToUTCStr(rDates[1])} != [2]string{"20180801T131313Z", "20180902T141414Z"} {
 		t.Errorf("Unexpected exDates: %v", exDates)
 	}
 

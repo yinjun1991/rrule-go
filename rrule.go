@@ -17,8 +17,8 @@ type RRule struct {
 	dtstart                 time.Time
 	interval                int
 	wkst                    int
-	count                   int       // 初始值为 0 表示不限制 count
-	until                   time.Time // zero time 表示不限制 until
+	count                   int       // A value of 0 means count is unlimited.
+	until                   time.Time // Zero time means until is unbounded.
 	bysetpos                []int
 	bymonth                 []int
 	bymonthday, bynmonthday []int
@@ -44,6 +44,14 @@ func NewRRule(arg ROption) (*RRule, error) {
 }
 
 func buildRRule(arg ROption) RRule {
+	if arg.Location == nil {
+		if !arg.Dtstart.IsZero() {
+			arg.Location = arg.Dtstart.Location()
+		} else {
+			arg.Location = time.UTC
+		}
+	}
+
 	r := RRule{}
 	r.Options = arg
 	// FREQ default to YEARLY
@@ -62,7 +70,7 @@ func buildRRule(arg ROption) RRule {
 
 	// DTSTART default to now
 	if arg.Dtstart.IsZero() {
-		arg.Dtstart = time.Now().UTC()
+		arg.Dtstart = time.Now().In(arg.Location)
 	}
 
 	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
@@ -132,42 +140,42 @@ func buildRRule(arg ROption) RRule {
 			r.bynweekday = append(r.bynweekday, wday)
 		}
 	}
-    if len(arg.Byhour) == 0 {
-        if r.freq < HOURLY {
-            if arg.AllDay {
-                // All-day events should have hour set to 0
-                r.byhour = []int{0}
-            } else {
-                r.byhour = []int{r.dtstart.Hour()}
-            }
-        }
-    } else {
-        r.byhour = arg.Byhour
-    }
-    if len(arg.Byminute) == 0 {
-        if r.freq < MINUTELY {
-            if arg.AllDay {
-                // All-day events should have minute set to 0
-                r.byminute = []int{0}
-            } else {
-                r.byminute = []int{r.dtstart.Minute()}
-            }
-        }
-    } else {
-        r.byminute = arg.Byminute
-    }
-    if len(arg.Bysecond) == 0 {
-        if r.freq < SECONDLY {
-            if arg.AllDay {
-                // All-day events should have second set to 0
-                r.bysecond = []int{0}
-            } else {
-                r.bysecond = []int{r.dtstart.Second()}
-            }
-        }
-    } else {
-        r.bysecond = arg.Bysecond
-    }
+	if len(arg.Byhour) == 0 {
+		if r.freq < HOURLY {
+			if arg.AllDay {
+				// All-day events should have hour set to 0
+				r.byhour = []int{0}
+			} else {
+				r.byhour = []int{r.dtstart.Hour()}
+			}
+		}
+	} else {
+		r.byhour = arg.Byhour
+	}
+	if len(arg.Byminute) == 0 {
+		if r.freq < MINUTELY {
+			if arg.AllDay {
+				// All-day events should have minute set to 0
+				r.byminute = []int{0}
+			} else {
+				r.byminute = []int{r.dtstart.Minute()}
+			}
+		}
+	} else {
+		r.byminute = arg.Byminute
+	}
+	if len(arg.Bysecond) == 0 {
+		if r.freq < SECONDLY {
+			if arg.AllDay {
+				// All-day events should have second set to 0
+				r.bysecond = []int{0}
+			} else {
+				r.bysecond = []int{r.dtstart.Second()}
+			}
+		}
+	} else {
+		r.bysecond = arg.Bysecond
+	}
 
 	// Reset the timeset value
 	r.timeset = nil
