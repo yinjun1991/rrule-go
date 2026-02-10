@@ -3,24 +3,25 @@ package rrule
 import (
 	"fmt"
 	"slices"
+	"sort"
 	"time"
 )
 
-// RRuleChangeType defines RRule change types.
-type RRuleChangeType int
+// RecurrenceChangeType defines recurrence change types.
+type RecurrenceChangeType int
 
 const (
 	// NoChange indicates no changes.
-	NoChange RRuleChangeType = iota
+	NoChange RecurrenceChangeType = iota
 	// FullRebuild indicates a full rebuild of all instances is required.
 	FullRebuild
 	// PartialUpdate indicates a partial update is sufficient.
 	PartialUpdate
 )
 
-// RRuleChangeAnalysis holds RRule change analysis results.
-type RRuleChangeAnalysis struct {
-	ChangeType RRuleChangeType
+// RecurrenceChangeAnalysis holds recurrence change analysis results.
+type RecurrenceChangeAnalysis struct {
+	ChangeType RecurrenceChangeType
 	// For PartialUpdate, the cutoff time for deleting instances.
 	DeleteAfter *time.Time
 	// For an extended UNTIL, the start time for generating new instances.
@@ -35,19 +36,19 @@ type RRuleChangeAnalysis struct {
 	Description string
 }
 
-// RRuleChangeAnalyzer provides RRule change analysis.
-type RRuleChangeAnalyzer struct{}
+// RecurrenceDiffer provides recurrence change analysis.
+type RecurrenceDiffer struct{}
 
-// NewRRuleChangeAnalyzer creates a new change analyzer.
-func NewRRuleChangeAnalyzer() *RRuleChangeAnalyzer {
-	return &RRuleChangeAnalyzer{}
+// NewRecurrenceDiffer creates a new change analyzer.
+func NewRecurrenceDiffer() *RecurrenceDiffer {
+	return &RecurrenceDiffer{}
 }
 
 // AnalyzeChanges analyzes changes between two rule sets.
-func (a *RRuleChangeAnalyzer) AnalyzeChanges(oldRuleSet, newRuleSet []string) (*RRuleChangeAnalysis, error) {
+func (a *RecurrenceDiffer) AnalyzeChanges(oldRuleSet, newRuleSet []string) (*RecurrenceChangeAnalysis, error) {
 	// If rules are identical, there are no changes.
 	if !HasRRuleChanges(oldRuleSet, newRuleSet) {
-		return &RRuleChangeAnalysis{
+		return &RecurrenceChangeAnalysis{
 			ChangeType:  NoChange,
 			Description: "No changes detected",
 		}, nil
@@ -67,7 +68,7 @@ func (a *RRuleChangeAnalyzer) AnalyzeChanges(oldRuleSet, newRuleSet []string) (*
 
 	// If either ruleset is empty, a full rebuild is required.
 	if oldHelper == nil || newHelper == nil {
-		return &RRuleChangeAnalysis{
+		return &RecurrenceChangeAnalysis{
 			ChangeType:  FullRebuild,
 			Description: "Rule added or removed",
 		}, nil
@@ -75,7 +76,7 @@ func (a *RRuleChangeAnalyzer) AnalyzeChanges(oldRuleSet, newRuleSet []string) (*
 
 	// Check whether a full rebuild is required.
 	if a.requiresFullRebuild(oldHelper, newHelper) {
-		return &RRuleChangeAnalysis{
+		return &RecurrenceChangeAnalysis{
 			ChangeType:  FullRebuild,
 			Description: "Core recurrence pattern changed, full rebuild required",
 		}, nil
@@ -86,16 +87,24 @@ func (a *RRuleChangeAnalyzer) AnalyzeChanges(oldRuleSet, newRuleSet []string) (*
 }
 
 // parseRulesForAnalysis parses rules for analysis using a default dtstart.
-func (a *RRuleChangeAnalyzer) parseRulesForAnalysis(ruleset []string) (*RecurrenceSetHelper, error) {
+func (a *RecurrenceDiffer) parseRulesForAnalysis(ruleset []string) (*Recurrence, error) {
 	if len(ruleset) == 0 {
 		return nil, nil
 	}
 
 	// Parse with the default dtstart.
 	defaultDTStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	helper, err := ParseRecurrenceSet(ruleset, defaultDTStart, false)
+	normalized, err := normalizeRecurrenceStrings(ruleset)
+	if err != nil {
+		return nil, err
+	}
+
+	set, err := StrSliceToRRuleSet(normalized)
 	if err == nil {
-		return helper, nil
+		if set.GetDTStart().IsZero() {
+			set.DTStart(defaultDTStart)
+		}
+		return set, nil
 	}
 
 	derivedDTStart, deriveErr := deriveMatchingDTStart(ruleset, defaultDTStart, false)
@@ -103,37 +112,38 @@ func (a *RRuleChangeAnalyzer) parseRulesForAnalysis(ruleset []string) (*Recurren
 		return nil, err
 	}
 
-	return ParseRecurrenceSet(ruleset, derivedDTStart, false)
+	set, err = StrSliceToRRuleSet(normalized)
+	if err != nil {
+		return nil, err
+	}
+	set.DTStart(derivedDTStart)
+	return set, nil
 }
 
 // requiresFullRebuild checks whether a full rebuild is required.
-func (a *RRuleChangeAnalyzer) requiresFullRebuild(oldHelper, newHelper *RecurrenceSetHelper) bool {
-	// Get RRule objects.
-	oldRRule := oldHelper.set.GetRRule()
-	newRRule := newHelper.set.GetRRule()
-
-	if oldRRule == nil || newRRule == nil {
+func (a *RecurrenceDiffer) requiresFullRebuild(oldSet, newSet *Recurrence) bool {
+	if oldSet == nil || newSet == nil || !oldSet.hasRule || !newSet.hasRule {
 		return true
 	}
 
 	// Check DTSTART changes; this affects all occurrences.
-	oldDTStart := oldHelper.set.GetDTStart()
-	newDTStart := newHelper.set.GetDTStart()
+	oldDTStart := oldSet.GetDTStart()
+	newDTStart := newSet.GetDTStart()
 	if !oldDTStart.Equal(newDTStart) {
 		return true
 	}
 
 	// Check all-day vs timed transitions; time semantics differ, so rebuild.
-	if oldHelper.allDay != newHelper.allDay {
+	if oldSet.IsAllDay() != newSet.IsAllDay() {
 		return true
 	}
 
 	// Check core property changes.
-	if oldRRule.Options.Freq != newRRule.Options.Freq {
+	if oldSet.freq != newSet.freq {
 		return true
 	}
 
-	if oldRRule.Options.Interval != newRRule.Options.Interval {
+	if oldSet.interval != newSet.interval {
 		return true
 	}
 
@@ -141,49 +151,61 @@ func (a *RRuleChangeAnalyzer) requiresFullRebuild(oldHelper, newHelper *Recurren
 	// They only affect termination, not the recurrence pattern itself.
 
 	// Check BYDAY changes.
-	if !slices.Equal(oldRRule.Options.Byweekday, newRRule.Options.Byweekday) {
+	if !slices.Equal(oldSet.byweekday, newSet.byweekday) {
+		return true
+	}
+
+	if !equalWeekdaySlices(oldSet.bynweekday, newSet.bynweekday) {
 		return true
 	}
 
 	// Check other BY* changes.
-	if !slices.Equal(oldRRule.Options.Bymonth, newRRule.Options.Bymonth) {
+	if !slices.Equal(oldSet.bymonth, newSet.bymonth) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Bymonthday, newRRule.Options.Bymonthday) {
+	if !slices.Equal(oldSet.bymonthday, newSet.bymonthday) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Byyearday, newRRule.Options.Byyearday) {
+	if !slices.Equal(oldSet.bynmonthday, newSet.bynmonthday) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Byweekno, newRRule.Options.Byweekno) {
+	if !slices.Equal(oldSet.byyearday, newSet.byyearday) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Byhour, newRRule.Options.Byhour) {
+	if !slices.Equal(oldSet.byweekno, newSet.byweekno) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Byminute, newRRule.Options.Byminute) {
+	if !slices.Equal(oldSet.byhour, newSet.byhour) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Bysecond, newRRule.Options.Bysecond) {
+	if !slices.Equal(oldSet.byminute, newSet.byminute) {
 		return true
 	}
 
-	if !slices.Equal(oldRRule.Options.Bysetpos, newRRule.Options.Bysetpos) {
+	if !slices.Equal(oldSet.bysecond, newSet.bysecond) {
 		return true
 	}
 
-	if oldRRule.Options.Wkst != newRRule.Options.Wkst {
+	if !slices.Equal(oldSet.bysetpos, newSet.bysetpos) {
+		return true
+	}
+
+	if oldSet.wkst != newSet.wkst {
+		return true
+	}
+
+	if !slices.Equal(oldSet.byeaster, newSet.byeaster) {
 		return true
 	}
 
 	// Check RDATE changes; they require a full rebuild.
-	if a.hasRDateChange(oldHelper, newHelper) {
+	if a.hasRDateChange(oldSet, newSet) {
 		return true
 	}
 
@@ -191,15 +213,15 @@ func (a *RRuleChangeAnalyzer) requiresFullRebuild(oldHelper, newHelper *Recurren
 }
 
 // analyzePartialUpdate analyzes partial updates.
-func (a *RRuleChangeAnalyzer) analyzePartialUpdate(oldHelper, newHelper *RecurrenceSetHelper) (*RRuleChangeAnalysis, error) {
-	analysis := &RRuleChangeAnalysis{
+func (a *RecurrenceDiffer) analyzePartialUpdate(oldSet, newSet *Recurrence) (*RecurrenceChangeAnalysis, error) {
+	analysis := &RecurrenceChangeAnalysis{
 		ChangeType: PartialUpdate,
 	}
 
 	// Check UNTIL changes.
-	if a.hasUntilChange(oldHelper, newHelper) {
-		oldUntil := oldHelper.GetUntil()
-		newUntil := newHelper.GetUntil()
+	if a.hasUntilChange(oldSet, newSet) {
+		oldUntil := ruleUntilValue(oldSet)
+		newUntil := ruleUntilValue(newSet)
 
 		if oldUntil != nil && newUntil != nil {
 			if newUntil.After(*oldUntil) {
@@ -224,8 +246,8 @@ func (a *RRuleChangeAnalyzer) analyzePartialUpdate(oldHelper, newHelper *Recurre
 	}
 
 	// Check EXDATE changes.
-	if a.hasExDateChange(oldHelper, newHelper) {
-		addedExDates, removedExDates := a.compareExDates(oldHelper.GetExDates(), newHelper.GetExDates())
+	if a.hasExDateChange(oldSet, newSet) {
+		addedExDates, removedExDates := a.compareExDates(oldSet.GetExDate(), newSet.GetExDate())
 		analysis.NewExDates = addedExDates
 		analysis.RemovedExDates = removedExDates
 		if analysis.Description == "" {
@@ -239,9 +261,9 @@ func (a *RRuleChangeAnalyzer) analyzePartialUpdate(oldHelper, newHelper *Recurre
 }
 
 // hasUntilChange checks whether UNTIL changed.
-func (a *RRuleChangeAnalyzer) hasUntilChange(oldHelper, newHelper *RecurrenceSetHelper) bool {
-	oldUntil := oldHelper.GetUntil()
-	newUntil := newHelper.GetUntil()
+func (a *RecurrenceDiffer) hasUntilChange(oldSet, newSet *Recurrence) bool {
+	oldUntil := ruleUntilValue(oldSet)
+	newUntil := ruleUntilValue(newSet)
 
 	if oldUntil == nil && newUntil == nil {
 		return false
@@ -253,9 +275,9 @@ func (a *RRuleChangeAnalyzer) hasUntilChange(oldHelper, newHelper *RecurrenceSet
 }
 
 // hasExDateChange checks whether EXDATE changed.
-func (a *RRuleChangeAnalyzer) hasExDateChange(oldHelper, newHelper *RecurrenceSetHelper) bool {
-	oldExDates := oldHelper.GetExDates()
-	newExDates := newHelper.GetExDates()
+func (a *RecurrenceDiffer) hasExDateChange(oldSet, newSet *Recurrence) bool {
+	oldExDates := oldSet.GetExDate()
+	newExDates := newSet.GetExDate()
 
 	if len(oldExDates) != len(newExDates) {
 		return true
@@ -277,7 +299,7 @@ func (a *RRuleChangeAnalyzer) hasExDateChange(oldHelper, newHelper *RecurrenceSe
 }
 
 // compareExDates compares two EXDATE lists.
-func (a *RRuleChangeAnalyzer) compareExDates(oldExDates, newExDates []time.Time) ([]time.Time, []time.Time) {
+func (a *RecurrenceDiffer) compareExDates(oldExDates, newExDates []time.Time) ([]time.Time, []time.Time) {
 	// Create a map for comparison.
 	oldMap := make(map[int64]time.Time)
 	newMap := make(map[int64]time.Time)
@@ -331,10 +353,9 @@ func deriveMatchingDTStart(ruleset []string, anchor time.Time, allDay bool) (tim
 	return first, nil
 }
 
-// hasRDateChange checks RDATE changes between RecurrenceSetHelper instances.
-func (a *RRuleChangeAnalyzer) hasRDateChange(oldHelper, newHelper *RecurrenceSetHelper) bool {
-	oldRDates := oldHelper.GetRDates()
-	newRDates := newHelper.GetRDates()
+func (a *RecurrenceDiffer) hasRDateChange(oldSet, newSet *Recurrence) bool {
+	oldRDates := oldSet.GetRDate()
+	newRDates := newSet.GetRDate()
 
 	if len(oldRDates) != len(newRDates) {
 		return true
@@ -353,4 +374,73 @@ func (a *RRuleChangeAnalyzer) hasRDateChange(oldHelper, newHelper *RecurrenceSet
 	}
 
 	return false
+}
+
+func ruleUntilValue(set *Recurrence) *time.Time {
+	if set == nil || !set.hasRule {
+		return nil
+	}
+	maxUntil := set.dtstart.Add(time.Duration(1<<63 - 1))
+	if set.until.Equal(maxUntil) {
+		return nil
+	}
+	value := set.until
+	return &value
+}
+
+func equalWeekdaySlices(a, b []Weekday) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func HasRRuleChanges(oldRules, newRules []string) bool {
+	normalizedOld, errOld := NormalizeRecurrenceRuleset(oldRules)
+	normalizedNew, errNew := NormalizeRecurrenceRuleset(newRules)
+
+	if errOld != nil || errNew != nil {
+		return !stringSlicesEqual(oldRules, newRules)
+	}
+
+	if len(normalizedOld) != len(normalizedNew) {
+		return true
+	}
+
+	if len(normalizedOld) == 0 {
+		return false
+	}
+
+	sortedOld := make([]string, len(normalizedOld))
+	copy(sortedOld, normalizedOld)
+	sortedNew := make([]string, len(normalizedNew))
+	copy(sortedNew, normalizedNew)
+
+	sort.Strings(sortedOld)
+	sort.Strings(sortedNew)
+
+	for i := range sortedOld {
+		if sortedOld[i] != sortedNew[i] {
+			return true
+		}
+	}
+
+	return false
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

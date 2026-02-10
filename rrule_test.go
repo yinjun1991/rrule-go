@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+func NewRRule(option ROption) (*Recurrence, error) {
+	return newRecurrence(option)
+}
+
 func timesEqual(value, want []time.Time) bool {
 	if len(value) != len(want) {
 		return false
@@ -3752,7 +3756,8 @@ func TestDTStartWithMicroseconds(t *testing.T) {
 func TestUntil(t *testing.T) {
 	r1, _ := NewRRule(ROption{Freq: DAILY,
 		Dtstart: time.Date(1997, 9, 2, 0, 0, 0, 0, time.UTC)})
-	r1.Until(time.Date(1998, 9, 2, 0, 0, 0, 0, time.UTC))
+	r1.Options.Until = time.Date(1998, 9, 2, 0, 0, 0, 0, time.UTC)
+	r1.rebuildRule()
 
 	r2, _ := NewRRule(ROption{Freq: DAILY,
 		Dtstart: time.Date(1997, 9, 2, 0, 0, 0, 0, time.UTC),
@@ -3766,7 +3771,8 @@ func TestUntil(t *testing.T) {
 
 	r3, _ := NewRRule(ROption{Freq: MONTHLY,
 		Dtstart: time.Date(MAXYEAR-100, 1, 1, 0, 0, 0, 0, time.UTC)})
-	r3.Until(time.Date(MAXYEAR+100, 1, 1, 0, 0, 0, 0, time.UTC))
+	r3.Options.Until = time.Date(MAXYEAR+100, 1, 1, 0, 0, 0, 0, time.UTC)
+	r3.rebuildRule()
 	v3 := r3.All()
 	if len(v3) != 101*12 {
 		t.Errorf("get %v, want %v", len(v3), 101*12)
@@ -4016,20 +4022,20 @@ func iterateNum(iter Next, num int) (last time.Time) {
 func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
 	timezones := []*time.Location{
 		time.UTC,
-		time.FixedZone("EST", -5*3600),  // UTC-5
-		time.FixedZone("JST", 9*3600),   // UTC+9
-		time.FixedZone("CET", 1*3600),   // UTC+1
-		time.FixedZone("PST", -8*3600),  // UTC-8
+		time.FixedZone("EST", -5*3600), // UTC-5
+		time.FixedZone("JST", 9*3600),  // UTC+9
+		time.FixedZone("CET", 1*3600),  // UTC+1
+		time.FixedZone("PST", -8*3600), // UTC-8
 	}
 
 	baseDate := time.Date(2023, 6, 15, 14, 30, 45, 0, time.UTC)
-	
+
 	for i, tz := range timezones {
 		t.Run(fmt.Sprintf("Timezone_%d", i), func(t *testing.T) {
 			// Create all-day events on the same date across timezones.
 			dtstart := time.Date(baseDate.Year(), baseDate.Month(), baseDate.Day(),
 				10+i*2, 15+i*5, 30+i*3, 0, tz) // Varying time components.
-			
+
 			r, err := NewRRule(ROption{
 				Freq:    DAILY,
 				Count:   3,
@@ -4046,7 +4052,7 @@ func TestRRuleAllDayTimezoneConsistency(t *testing.T) {
 				time.Date(2023, 6, 16, 0, 0, 0, 0, time.UTC),
 				time.Date(2023, 6, 17, 0, 0, 0, 0, time.UTC),
 			}
-			
+
 			result := r.All()
 			if !timesEqual(result, expected) {
 				t.Errorf("Timezone %s: expected %v, got %v", tz.String(), expected, result)
@@ -4070,7 +4076,7 @@ func TestRRuleTimezonePreservation(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			dtstart := time.Date(2023, 1, 1, 14, 30, 0, 0, tc.tz)
-			
+
 			r, err := NewRRule(ROption{
 				Freq:    DAILY,
 				Count:   2,
@@ -4082,20 +4088,20 @@ func TestRRuleTimezonePreservation(t *testing.T) {
 			}
 
 			result := r.All()
-			
+
 			// Verify timezone is preserved.
 			for _, dt := range result {
 				if dt.Location() != tc.tz {
 					t.Errorf("Expected timezone %s, got %s", tc.tz.String(), dt.Location().String())
 				}
 			}
-			
+
 			// Verify time precision.
 			expected := []time.Time{
 				time.Date(2023, 1, 1, 14, 30, 0, 0, tc.tz),
 				time.Date(2023, 1, 2, 14, 30, 0, 0, tc.tz),
 			}
-			
+
 			if !timesEqual(result, expected) {
 				t.Errorf("Expected %v, got %v", expected, result)
 			}
@@ -4106,33 +4112,33 @@ func TestRRuleTimezonePreservation(t *testing.T) {
 // TestRRuleLeapYearHandling tests leap year handling.
 func TestRRuleLeapYearHandling(t *testing.T) {
 	testCases := []struct {
-		name     string
-		dtstart  time.Time
-		freq     Frequency
-		bymonth  []int
-		bymonthday []int
-		count    int
+		name          string
+		dtstart       time.Time
+		freq          Frequency
+		bymonth       []int
+		bymonthday    []int
+		count         int
 		expectLeapDay bool
 	}{
 		{
-			name:     "Leap_Year_Feb29",
-			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // 2020 is a leap year.
-			freq:     YEARLY,
-			count:    4,
+			name:          "Leap_Year_Feb29",
+			dtstart:       time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC), // 2020 is a leap year.
+			freq:          YEARLY,
+			count:         4,
 			expectLeapDay: true,
 		},
 		{
-			name:     "Non_Leap_Year_Feb29_Skip",
-			dtstart:  time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC),
-			freq:     YEARLY,
-			count:    5, // Crosses non-leap years.
+			name:          "Non_Leap_Year_Feb29_Skip",
+			dtstart:       time.Date(2020, 2, 29, 10, 0, 0, 0, time.UTC),
+			freq:          YEARLY,
+			count:         5, // Crosses non-leap years.
 			expectLeapDay: false,
 		},
 		{
-			name:     "Monthly_Feb29_Handling",
-			dtstart:  time.Date(2020, 1, 29, 10, 0, 0, 0, time.UTC),
-			freq:     MONTHLY,
-			count:    3, // Jan 29 -> Feb 29 -> Mar 29.
+			name:          "Monthly_Feb29_Handling",
+			dtstart:       time.Date(2020, 1, 29, 10, 0, 0, 0, time.UTC),
+			freq:          MONTHLY,
+			count:         3, // Jan 29 -> Feb 29 -> Mar 29.
 			expectLeapDay: true,
 		},
 	}
@@ -4157,7 +4163,7 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 			}
 
 			result := r.All()
-			
+
 			// Check for Feb 29.
 			hasLeapDay := false
 			for _, dt := range result {
@@ -4166,11 +4172,11 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 					break
 				}
 			}
-			
+
 			if tc.expectLeapDay && !hasLeapDay {
 				t.Errorf("Expected leap day (Feb 29) in results, but not found. Results: %v", result)
 			}
-			
+
 			// Verify results are non-empty.
 			if len(result) == 0 {
 				t.Error("No results generated")
@@ -4182,19 +4188,19 @@ func TestRRuleLeapYearHandling(t *testing.T) {
 // TestRRuleComplexByRuleCombinations tests complex BY rule combinations.
 func TestRRuleComplexByRuleCombinations(t *testing.T) {
 	testCases := []struct {
-		name    string
-		option  ROption
+		name       string
+		option     ROption
 		minResults int
 		maxResults int
 	}{
 		{
 			name: "Multiple_BY_Rules_Intersection",
 			option: ROption{
-				Freq:      MONTHLY,
-				Count:     12,
-				Byweekday: []Weekday{MO, WE, FR}, // Mon, Wed, Fri.
-				Bymonthday: []int{1, 15, 30},     // 1st, 15th, 30th.
-				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
+				Freq:       MONTHLY,
+				Count:      12,
+				Byweekday:  []Weekday{MO, WE, FR}, // Mon, Wed, Fri.
+				Bymonthday: []int{1, 15, 30},      // 1st, 15th, 30th.
+				Dtstart:    time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			minResults: 1,
 			maxResults: 12,
@@ -4205,7 +4211,7 @@ func TestRRuleComplexByRuleCombinations(t *testing.T) {
 				Freq:      MONTHLY,
 				Count:     6,
 				Byweekday: []Weekday{MO, TU, WE, TH, FR}, // Weekdays.
-				Bysetpos:  []int{1, -1}, // First and last.
+				Bysetpos:  []int{1, -1},                  // First and last.
 				Dtstart:   time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 			minResults: 6,
@@ -4233,15 +4239,15 @@ func TestRRuleComplexByRuleCombinations(t *testing.T) {
 			}
 
 			result := r.All()
-			
+
 			if len(result) < tc.minResults {
 				t.Errorf("Expected at least %d results, got %d", tc.minResults, len(result))
 			}
-			
+
 			if len(result) > tc.maxResults {
 				t.Errorf("Expected at most %d results, got %d", tc.maxResults, len(result))
 			}
-			
+
 			// Verify results are sorted.
 			for i := 1; i < len(result); i++ {
 				if result[i].Before(result[i-1]) {
@@ -4313,18 +4319,18 @@ func TestRRuleEdgeCaseParameters(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			r, err := NewRRule(tc.option)
-			
+
 			if tc.expectErr {
 				if err == nil {
 					t.Error("Expected error but got none")
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			// For valid rules, verify results are generated.
 			result := r.All()
 			if len(result) == 0 && tc.option.Count > 0 {
@@ -4348,19 +4354,20 @@ func TestRRuleMethodChaining(t *testing.T) {
 	// Test DTStart update.
 	newDtstart := time.Date(2023, 2, 1, 15, 30, 0, 0, time.UTC)
 	r.DTStart(newDtstart)
-	
+
 	if !r.GetDTStart().Equal(newDtstart.Truncate(time.Second)) {
-		t.Errorf("DTStart not updated correctly: expected %v, got %v", 
+		t.Errorf("DTStart not updated correctly: expected %v, got %v",
 			newDtstart.Truncate(time.Second), r.GetDTStart())
 	}
 
 	// Test Until update.
 	newUntil := time.Date(2023, 2, 5, 20, 0, 0, 0, time.UTC)
-	r.Until(newUntil)
-	
-	if !r.GetUntil().Equal(newUntil.Truncate(time.Second)) {
-		t.Errorf("Until not updated correctly: expected %v, got %v", 
-			newUntil.Truncate(time.Second), r.GetUntil())
+	r.Options.Until = newUntil
+	r.rebuildRule()
+
+	if !r.until.Equal(newUntil.Truncate(time.Second)) {
+		t.Errorf("Until not updated correctly: expected %v, got %v",
+			newUntil.Truncate(time.Second), r.until)
 	}
 
 	// Test AllDay toggle.
@@ -4368,7 +4375,7 @@ func TestRRuleMethodChaining(t *testing.T) {
 	if !r.IsAllDay() {
 		t.Error("AllDay flag not set correctly")
 	}
-	
+
 	// Verify time is normalized in AllDay mode.
 	result := r.All()
 	for _, dt := range result {
@@ -4409,11 +4416,11 @@ func TestRRuleIteratorConsistency(t *testing.T) {
 
 			// Use All() to collect results.
 			allResults := r.All()
-			
+
 			// Use the iterator to collect results.
 			iterator := r.Iterator()
 			var iterResults []time.Time
-			
+
 			for {
 				next, ok := iterator()
 				if !ok {
@@ -4421,10 +4428,10 @@ func TestRRuleIteratorConsistency(t *testing.T) {
 				}
 				iterResults = append(iterResults, next)
 			}
-			
+
 			// Verify results match.
 			if !timesEqual(allResults, iterResults) {
-				t.Errorf("All() and Iterator() results differ:\nAll(): %v\nIterator(): %v", 
+				t.Errorf("All() and Iterator() results differ:\nAll(): %v\nIterator(): %v",
 					allResults, iterResults)
 			}
 		})
@@ -4469,10 +4476,10 @@ func TestRRuleStringRoundTrip(t *testing.T) {
 			}
 
 			// Serialize to string.
-			rruleStr := original.String()
-			
+			rruleStr := original.String(true)
+
 			// Parse from string.
-			parsed, err := StrToRRule(rruleStr)
+			parsed, err := StrToRRuleSet(rruleStr)
 			if err != nil {
 				t.Fatalf("Failed to parse RRule string '%s': %v", rruleStr, err)
 			}
@@ -4480,9 +4487,9 @@ func TestRRuleStringRoundTrip(t *testing.T) {
 			// Compare results.
 			originalResults := original.All()
 			parsedResults := parsed.All()
-			
+
 			if !timesEqual(originalResults, parsedResults) {
-				t.Errorf("Round-trip results differ:\nOriginal: %v\nParsed: %v\nRRule String: %s", 
+				t.Errorf("Round-trip results differ:\nOriginal: %v\nParsed: %v\nRRule String: %s",
 					originalResults, parsedResults, rruleStr)
 			}
 		})
@@ -4496,8 +4503,8 @@ func TestRRulePerformanceBaseline(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name   string
-		option ROption
+		name        string
+		option      ROption
 		maxDuration time.Duration
 	}{
 		{
@@ -4532,11 +4539,11 @@ func TestRRulePerformanceBaseline(t *testing.T) {
 			start := time.Now()
 			result := r.All()
 			duration := time.Since(start)
-			
+
 			if duration > tc.maxDuration {
 				t.Errorf("Performance test failed: took %v, expected < %v", duration, tc.maxDuration)
 			}
-			
+
 			t.Logf("Generated %d results in %v", len(result), duration)
 		})
 	}
