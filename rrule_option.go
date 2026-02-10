@@ -10,15 +10,15 @@ import (
 
 // ROption offers options to construct a RRule instance.
 // For performance, it is strongly recommended providing explicit ROption.Dtstart.
-// If Dtstart is zero, it defaults to time.Now() in the effective location (Dtstart's location, otherwise Location or UTC).
+// If Dtstart is zero, it defaults to time.Now().UTC().
+// AllDay uses floating DATE semantics (VALUE=DATE); non-all-day does not support floating DATE-TIME.
 type ROption struct {
 	Freq       Frequency
-	Dtstart    time.Time
-	Location   *time.Location // Default timezone for local date-times; falls back to UTC.
+	Dtstart    time.Time // Caller must set the timezone on Dtstart first; if AllDay is true, recurrence starts from Dtstart's local date (e.g., 2024-06-01T23:00:00+02:00 starts on 2024-06-01).
 	Interval   int
 	Wkst       Weekday
 	Count      int
-	Until      time.Time
+	Until      time.Time // For all-day, only the date fields of Until are used (time-of-day is ignored); for non-all-day, Until must be UTC and preserves time-of-day.
 	Bysetpos   []int
 	Bymonth    []int
 	Bymonthday []int
@@ -43,9 +43,6 @@ func (option *ROption) String() string {
 	}
 
 	dtstart := option.Dtstart
-	if option.Location != nil {
-		dtstart = dtstart.In(option.Location)
-	}
 
 	// Handle AllDay events: use DATE format as per RFC 5545
 	if option.AllDay {
@@ -76,8 +73,8 @@ func (option *ROption) RRuleString() string {
 		// RFC 5545: UNTIL value type must match DTSTART value type
 		// For all-day events (floating time), UNTIL should also use floating time
 		if option.AllDay {
-			loc := option.Location
-			if loc == nil {
+			loc := time.UTC
+			if !option.Dtstart.IsZero() {
 				loc = option.Dtstart.Location()
 			}
 			until := option.Until.In(loc)
@@ -127,7 +124,10 @@ func StrToROption(rfcString string) (*ROption, error) {
 		return nil, errors.New("invalid RRULE string")
 	}
 
-	result := ROption{Location: defaultLoc}
+	result := ROption{}
+	var dtstartIsDate bool
+	var dtstartHasTZID bool
+	var dtstartIsUTC bool
 	freqSet := false
 
 	if dtstartStr != "" {
@@ -140,8 +140,9 @@ func StrToROption(rfcString string) (*ROption, error) {
 		}
 
 		dtstartValue := dtstartStr[len(firstName)+1:]
+		dtstartIsDate, dtstartHasTZID, dtstartIsUTC = detectDtstartKind(dtstartValue)
 		// Check if this is an all-day event (VALUE=DATE)
-		if strings.HasPrefix(dtstartValue, "VALUE=DATE:") {
+		if dtstartIsDate {
 			result.AllDay = true
 		}
 
@@ -150,8 +151,7 @@ func StrToROption(rfcString string) (*ROption, error) {
 			return nil, fmt.Errorf("StrToDtStart failed: %s", err)
 		}
 		if !result.Dtstart.IsZero() {
-			result.Location = result.Dtstart.Location()
-			defaultLoc = result.Location
+			defaultLoc = result.Dtstart.Location()
 		}
 	}
 
@@ -179,6 +179,15 @@ func StrToROption(rfcString string) (*ROption, error) {
 		case "COUNT":
 			result.Count, err = strconv.Atoi(value)
 		case "UNTIL":
+			if dtstartIsDate {
+				if len(value) != len(DateFormat) || strings.Contains(value, "T") {
+					return nil, fmt.Errorf("UNTIL must be DATE when DTSTART is DATE")
+				}
+			} else if dtstartHasTZID || dtstartIsUTC {
+				if !strings.HasSuffix(strings.ToUpper(value), "Z") {
+					return nil, fmt.Errorf("UNTIL must be UTC when DTSTART uses TZID or UTC")
+				}
+			}
 			result.Until, err = strToTimeInLoc(value, defaultLoc)
 		case "BYSETPOS":
 			result.Bysetpos, err = strToInts(value)
@@ -208,12 +217,6 @@ func StrToROption(rfcString string) (*ROption, error) {
 		}
 	}
 
-	if !result.Dtstart.IsZero() {
-		result.Location = result.Dtstart.Location()
-	} else if result.Location == nil {
-		result.Location = time.UTC
-	}
-
 	if !freqSet {
 		// Per RFC 5545, FREQ is mandatory and supposed to be the first
 		// parameter. We'll just confirm it exists because we do not
@@ -224,14 +227,16 @@ func StrToROption(rfcString string) (*ROption, error) {
 	return &result, nil
 }
 
-func (option *ROption) GetLocation() *time.Location {
-	if option.Location != nil {
-		return option.Location
+func detectDtstartKind(dtstartValue string) (bool, bool, bool) {
+	upper := strings.ToUpper(dtstartValue)
+	if strings.HasPrefix(upper, "VALUE=DATE:") {
+		return true, false, false
 	}
-
-	if option.Dtstart.IsZero() {
-		return time.UTC
+	hasTZID := strings.HasPrefix(upper, "TZID=") || strings.Contains(upper, ";TZID=")
+	timePart := upper
+	if idx := strings.LastIndex(upper, ":"); idx >= 0 {
+		timePart = upper[idx+1:]
 	}
-
-	return option.Dtstart.Location()
+	isUTC := strings.HasSuffix(timePart, "Z")
+	return false, hasTZID, isUTC
 }

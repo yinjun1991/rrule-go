@@ -9,51 +9,73 @@ import (
 	"time"
 )
 
-// RRule offers a small, complete, and very fast, implementation of the recurrence rules
-// documented in the iCalendar RFC, including support for caching of results.
-type RRule struct {
-	Options                 ROption
-	freq                    Frequency
-	dtstart                 time.Time
-	interval                int
-	wkst                    int
-	count                   int       // A value of 0 means count is unlimited.
-	until                   time.Time // Zero time means until is unbounded.
-	bysetpos                []int
-	bymonth                 []int
-	bymonthday, bynmonthday []int
-	byyearday               []int
-	byweekno                []int
-	byweekday               []int
-	bynweekday              []Weekday
-	byhour                  []int
-	byminute                []int
-	bysecond                []int
-	byeaster                []int
-	timeset                 []time.Time
-	len                     int
+func New(option ROption) *Recurrence {
+	rec, err := newRecurrence(option)
+	if err != nil {
+		return nil
+	}
+	return rec
 }
 
-// NewRRule construct a new RRule instance
-func NewRRule(arg ROption) (*RRule, error) {
-	if err := validateBounds(arg); err != nil {
+func newRecurrence(option ROption) (*Recurrence, error) {
+	rec := &Recurrence{}
+	if err := rec.setRuleOptions(option); err != nil {
 		return nil, err
 	}
-	r := buildRRule(arg)
-	return &r, nil
+	return rec, nil
 }
 
-func buildRRule(arg ROption) RRule {
-	if arg.Location == nil {
-		if !arg.Dtstart.IsZero() {
-			arg.Location = arg.Dtstart.Location()
-		} else {
-			arg.Location = time.UTC
-		}
+func (r *Recurrence) normalizeAllDayTimes() {
+	if !r.dtstart.IsZero() {
+		year, month, day := r.dtstart.Date()
+		r.dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
+	for i, rdate := range r.rdate {
+		year, month, day := rdate.Date()
+		r.rdate[i] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
+	for i, exdate := range r.exdate {
+		year, month, day := exdate.Date()
+		r.exdate[i] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	}
+}
+
+func (r *Recurrence) setRuleOptions(option ROption) error {
+	if option.AllDay && !r.allDay {
+		r.allDay = true
+		r.normalizeAllDayTimes()
+	} else if r.allDay && !option.AllDay {
+		option.AllDay = true
 	}
 
-	r := RRule{}
+	if option.Dtstart.IsZero() && !r.dtstart.IsZero() {
+		option.Dtstart = r.dtstart
+	}
+
+	if err := r.applyRule(option); err != nil {
+		return err
+	}
+
+	if !r.dtstart.IsZero() {
+		r.Options.Dtstart = r.dtstart
+	}
+
+	r.hasRule = true
+	return nil
+}
+
+func (r *Recurrence) rebuildRule() {
+	_ = r.applyRule(r.Options)
+	r.hasRule = true
+}
+
+func (r *Recurrence) applyRule(arg ROption) error {
+	if err := validateBounds(arg); err != nil {
+		return err
+	}
 	r.Options = arg
+	r.allDay = arg.AllDay
+
 	// FREQ default to YEARLY
 	r.freq = arg.Freq
 
@@ -70,7 +92,7 @@ func buildRRule(arg ROption) RRule {
 
 	// DTSTART default to now
 	if arg.Dtstart.IsZero() {
-		arg.Dtstart = time.Now().In(arg.Location)
+		arg.Dtstart = time.Now().UTC()
 	}
 
 	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
@@ -192,7 +214,7 @@ func buildRRule(arg ROption) RRule {
 		sort.Sort(timeSlice(r.timeset))
 	}
 
-	return r
+	return nil
 }
 
 // validateBounds checks the RRule's options are within the boundaries defined
@@ -250,20 +272,24 @@ func validateBounds(arg ROption) error {
 	return nil
 }
 
-// Iterator return an iterator for RRule
-func (r *RRule) Iterator() Next {
+func (r *Recurrence) ruleIterator() Next {
+	if !r.hasRule {
+		return func() (time.Time, bool) {
+			return time.Time{}, false
+		}
+	}
 	iterator := rIterator{}
 	iterator.year, iterator.month, iterator.day = r.dtstart.Date()
 
 	// Handle AllDay events: use 00:00:00 for all-day events
-	if r.Options.AllDay {
+	if r.allDay {
 		iterator.hour, iterator.minute, iterator.second = 0, 0, 0
 	} else {
 		iterator.hour, iterator.minute, iterator.second = r.dtstart.Clock()
 	}
 	iterator.weekday = toPyWeekday(r.dtstart.Weekday())
 
-	iterator.ii = iterInfo{rrule: r}
+	iterator.ii = iterInfo{recurrence: r}
 	iterator.ii.rebuild(iterator.year, iterator.month)
 
 	if r.freq < HOURLY {
@@ -279,120 +305,4 @@ func (r *RRule) Iterator() Next {
 	}
 	iterator.count = r.count
 	return iterator.next
-}
-
-// All returns all occurrences of the RRule.
-// It is only supported second precision.
-func (r *RRule) All() []time.Time {
-	return all(r.Iterator())
-}
-
-// Between returns all the occurrences of the RRule between after and before.
-// The inc keyword defines what happens if after and/or before are themselves occurrences.
-// With inc == True, they will be included in the list, if they are found in the recurrence set.
-// It is only supported second precision.
-func (r *RRule) Between(after, before time.Time, inc bool) []time.Time {
-	return between(r.Iterator(), after, before, inc)
-}
-
-// Before returns the last recurrence before the given datetime instance,
-// or time.Time's zero value if no recurrence match.
-// The inc keyword defines what happens if dt is an occurrence.
-// With inc == True, if dt itself is an occurrence, it will be returned.
-// It is only supported second precision.
-func (r *RRule) Before(dt time.Time, inc bool) time.Time {
-	return before(r.Iterator(), dt, inc)
-}
-
-// After returns the first recurrence after the given datetime instance,
-// or time.Time's zero value if no recurrence match.
-// The inc keyword defines what happens if dt is an occurrence.
-// With inc == True, if dt itself is an occurrence, it will be returned.
-// It is only supported second precision.
-func (r *RRule) After(dt time.Time, inc bool) time.Time {
-	return after(r.Iterator(), dt, inc)
-}
-
-// DTStart set a new DTSTART for the rule and recalculates the timeset if needed.
-// It will be truncated to second precision.
-// Default to `time.Now().UTC().Truncate(time.Second)`.
-func (r *RRule) DTStart(dt time.Time) {
-	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
-	if r.Options.AllDay {
-		// All-day events should use floating time (no timezone binding)
-		// In Go, we represent floating time as UTC to ensure consistency
-		year, month, day := dt.Date()
-		r.Options.Dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-	} else {
-		// Non all-day events: truncate to second precision
-		r.Options.Dtstart = dt.Truncate(time.Second)
-	}
-	*r = buildRRule(r.Options)
-}
-
-// GetDTStart gets DTSTART time for rrule
-func (r *RRule) GetDTStart() time.Time {
-	return r.dtstart
-}
-
-// Until set a new UNTIL for the rule and recalculates the timeset if needed.
-// It will be truncated to second precision.
-// Default to `Dtstart.Add(time.Duration(1<<63 - 1))`, approximately 290 years.
-func (r *RRule) Until(ut time.Time) {
-	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
-	if r.Options.AllDay {
-		// All-day events should use floating time (no timezone binding)
-		// In Go, we represent floating time as UTC to ensure consistency
-		year, month, day := ut.Date()
-		r.Options.Until = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-	} else {
-		// Non all-day events: truncate to second precision
-		r.Options.Until = ut.Truncate(time.Second)
-	}
-	*r = buildRRule(r.Options)
-}
-
-// GetUntil gets UNTIL time for rrule
-func (r *RRule) GetUntil() time.Time {
-	return r.until
-}
-
-// IsAllDay returns whether the set is configured for all-day events.
-func (r *RRule) IsAllDay() bool {
-	return r.Options.AllDay
-}
-
-func (r *RRule) SetAllDay(allDay bool) {
-	r.Options.AllDay = allDay
-
-	// If switching to all-day, normalize existing time values
-	if allDay {
-		// Normalize Dtstart to floating time (00:00:00 UTC)
-		if !r.Options.Dtstart.IsZero() {
-			year, month, day := r.Options.Dtstart.Date()
-			r.Options.Dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		}
-
-		// Normalize Until to floating time (00:00:00 UTC)
-		if !r.Options.Until.IsZero() {
-			year, month, day := r.Options.Until.Date()
-			r.Options.Until = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		}
-	}
-
-	// Rebuild the RRule with updated options
-	*r = buildRRule(r.Options)
-}
-
-func (r *RRule) String() string {
-	return r.Options.String()
-}
-
-// StrToRRule converts string to RRule
-func StrToRRule(rfcString string) (*RRule, error) {
-	option, e := StrToROption(rfcString)
-	if e != nil {
-		return nil, e
-	}
-	return NewRRule(*option)
 }

@@ -10,17 +10,36 @@ import (
 	"time"
 )
 
-// Set allows more complex recurrence setups, mixing multiple rules, dates, exclusion rules, and exclusion dates
-type Set struct {
-	dtstart time.Time
-	rrule   *RRule
-	rdate   []time.Time
-	exdate  []time.Time
-	allDay  bool // RFC 5545: All-day events use floating time (no timezone binding)
+// Recurrence allows more complex recurrence setups, mixing multiple rules, dates, exclusion rules, and exclusion dates
+type Recurrence struct {
+	Options                 ROption
+	freq                    Frequency
+	dtstart                 time.Time
+	interval                int
+	wkst                    int
+	count                   int
+	until                   time.Time
+	bysetpos                []int
+	bymonth                 []int
+	bymonthday, bynmonthday []int
+	byyearday               []int
+	byweekno                []int
+	byweekday               []int
+	bynweekday              []Weekday
+	byhour                  []int
+	byminute                []int
+	bysecond                []int
+	byeaster                []int
+	timeset                 []time.Time
+	len                     int
+	rdate                   []time.Time
+	exdate                  []time.Time
+	allDay                  bool
+	hasRule                 bool
 }
 
 // Recurrence returns a slice of all the recurrence rules for a set
-func (set *Set) Recurrence(includeDTSTART bool) []string {
+func (set *Recurrence) Recurrence(includeDTSTART bool) []string {
 	var res []string
 
 	if !set.dtstart.IsZero() && includeDTSTART {
@@ -36,8 +55,8 @@ func (set *Set) Recurrence(includeDTSTART bool) []string {
 		}
 	}
 
-	if set.rrule != nil {
-		res = append(res, fmt.Sprintf("RRULE:%s", set.rrule.Options.RRuleString()))
+	if set.hasRule {
+		res = append(res, fmt.Sprintf("RRULE:%s", set.Options.RRuleString()))
 	}
 
 	for _, item := range set.rdate {
@@ -66,14 +85,14 @@ func (set *Set) Recurrence(includeDTSTART bool) []string {
 	return res
 }
 
-func (set *Set) String(includeDTSTART bool) string {
+func (set *Recurrence) String(includeDTSTART bool) string {
 	res := set.Recurrence(includeDTSTART)
 	return strings.Join(res, "\n")
 }
 
 // DTStart sets dtstart property for set.
 // It will be truncated to second precision.
-func (set *Set) DTStart(dtstart time.Time) {
+func (set *Recurrence) DTStart(dtstart time.Time) {
 	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
 	if set.allDay {
 		// All-day events should use floating time (no timezone binding)
@@ -85,57 +104,27 @@ func (set *Set) DTStart(dtstart time.Time) {
 		set.dtstart = dtstart.Truncate(time.Second)
 	}
 
-	if set.rrule != nil {
-		set.rrule.DTStart(set.dtstart)
+	set.Options.Dtstart = set.dtstart
+	if set.hasRule {
+		set.rebuildRule()
 	}
 }
 
 // GetDTStart gets DTSTART for set
-func (set *Set) GetDTStart() time.Time {
+func (set *Recurrence) GetDTStart() time.Time {
 	return set.dtstart
 }
 
-// RRule set the RRULE for set.
-// There is the only one RRULE in the set as https://tools.ietf.org/html/rfc5545#appendix-A.1
-func (set *Set) RRule(rrule *RRule) {
-	if rrule == nil {
-		return
+func (set *Recurrence) GetOptions() *ROption {
+	if !set.hasRule {
+		return nil
 	}
-
-	// If we are not yet all-day but the incoming rule is, flip the set first so that
-	// existing dates (DTSTART/RDATE/EXDATE) are normalized before we proceed.
-	if rrule.Options.AllDay && !set.allDay {
-		// Temporarily attach the rule so SetAllDay can update it as well.
-		set.rrule = rrule
-		set.SetAllDay(true)
-	} else if set.allDay && !rrule.Options.AllDay {
-		// Set is already all-day, incoming rule must match to keep comparisons consistent.
-		rrule.SetAllDay(true)
-	}
-
-	// Synchronize DTSTART between the set and the rule.
-	if !rrule.Options.Dtstart.IsZero() {
-		set.dtstart = rrule.dtstart
-		// Ensure floating representation stays normalized after adopting the rule's DTSTART.
-		if set.allDay {
-			year, month, day := set.dtstart.Date()
-			set.dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		}
-	} else if !set.dtstart.IsZero() {
-		rrule.DTStart(set.dtstart)
-	}
-
-	set.rrule = rrule
-}
-
-// GetRRule returns the rrules in the set
-func (set *Set) GetRRule() *RRule {
-	return set.rrule
+	return &set.Options
 }
 
 // RDate include the given datetime instance in the recurrence set generation.
 // It will be truncated to second precision.
-func (set *Set) RDate(rdate time.Time) {
+func (set *Recurrence) RDate(rdate time.Time) {
 	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
 	if set.allDay {
 		// All-day events should use floating time (no timezone binding)
@@ -150,7 +139,7 @@ func (set *Set) RDate(rdate time.Time) {
 
 // SetRDates sets explicitly added dates (rdates) in the set.
 // It will be truncated to second precision.
-func (set *Set) SetRDates(rdates []time.Time) {
+func (set *Recurrence) SetRDates(rdates []time.Time) {
 	set.rdate = make([]time.Time, 0, len(rdates))
 	for _, rdate := range rdates {
 		// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
@@ -167,7 +156,7 @@ func (set *Set) SetRDates(rdates []time.Time) {
 }
 
 // GetRDate returns explicitly added dates (rdates) in the set
-func (set *Set) GetRDate() []time.Time {
+func (set *Recurrence) GetRDate() []time.Time {
 	return set.rdate
 }
 
@@ -175,7 +164,7 @@ func (set *Set) GetRDate() []time.Time {
 // Dates included that way will not be generated,
 // even if some inclusive rrule or rdate matches them.
 // It will be truncated to second precision.
-func (set *Set) ExDate(exdate time.Time) {
+func (set *Recurrence) ExDate(exdate time.Time) {
 	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
 	if set.allDay {
 		// All-day events should use floating time (no timezone binding)
@@ -190,7 +179,7 @@ func (set *Set) ExDate(exdate time.Time) {
 
 // SetExDates sets explicitly excluded dates (exdates) in the set.
 // It will be truncated to second precision.
-func (set *Set) SetExDates(exdates []time.Time) {
+func (set *Recurrence) SetExDates(exdates []time.Time) {
 	set.exdate = make([]time.Time, 0, len(exdates))
 	for _, exdate := range exdates {
 		// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
@@ -207,19 +196,14 @@ func (set *Set) SetExDates(exdates []time.Time) {
 }
 
 // GetExDate returns explicitly excluded dates (exdates) in the set.
-func (set *Set) GetExDate() []time.Time {
+func (set *Recurrence) GetExDate() []time.Time {
 	return set.exdate
 }
 
 // SetAllDay sets the all-day flag for the set.
 // When set to true, all time values (dtstart, rdate, exdate) will be normalized to floating time.
-func (set *Set) SetAllDay(allDay bool) {
+func (set *Recurrence) SetAllDay(allDay bool) {
 	set.allDay = allDay
-
-	// Only call SetAllDay on rrule if it exists
-	if set.rrule != nil {
-		set.rrule.SetAllDay(allDay)
-	}
 
 	// If switching to all-day, normalize existing times
 	if allDay {
@@ -241,15 +225,19 @@ func (set *Set) SetAllDay(allDay bool) {
 			set.exdate[i] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 		}
 
-		// Update rrule if exists and we have a concrete DTSTART to mirror
-		if set.rrule != nil && !set.dtstart.IsZero() {
-			set.rrule.DTStart(set.dtstart)
+		if !set.dtstart.IsZero() {
+			set.Options.Dtstart = set.dtstart
 		}
+	}
+
+	if set.hasRule {
+		set.Options.AllDay = allDay
+		set.rebuildRule()
 	}
 }
 
 // IsAllDay returns whether the set is configured for all-day events.
-func (set *Set) IsAllDay() bool {
+func (set *Recurrence) IsAllDay() bool {
 	return set.allDay
 }
 
@@ -272,7 +260,7 @@ func addGenList(genList *[]genItem, next Next) {
 }
 
 // Iterator returns an iterator for rrule.Set
-func (set *Set) Iterator() (next func() (time.Time, bool)) {
+func (set *Recurrence) Iterator() (next func() (time.Time, bool)) {
 	rlist := []genItem{}
 	exlist := []genItem{}
 
@@ -288,8 +276,8 @@ func (set *Set) Iterator() (next func() (time.Time, bool)) {
 
 	sort.Sort(timeSlice(rdates))
 	addGenList(&rlist, timeSliceIterator(rdates))
-	if set.rrule != nil {
-		addGenList(&rlist, set.rrule.Iterator())
+	if set.hasRule {
+		addGenList(&rlist, set.ruleIterator())
 	}
 	sort.Sort(genItemSlice(rlist))
 
@@ -350,7 +338,7 @@ func (set *Set) Iterator() (next func() (time.Time, bool)) {
 
 // All returns all occurrences of the rrule.Set.
 // It is only supported second precision.
-func (set *Set) All() []time.Time {
+func (set *Recurrence) All() []time.Time {
 	return all(set.Iterator())
 }
 
@@ -358,7 +346,7 @@ func (set *Set) All() []time.Time {
 // The inc keyword defines what happens if after and/or before are themselves occurrences.
 // With inc == True, they will be included in the list, if they are found in the recurrence set.
 // It is only supported second precision.
-func (set *Set) Between(after, before time.Time, inc bool) []time.Time {
+func (set *Recurrence) Between(after, before time.Time, inc bool) []time.Time {
 	return between(set.Iterator(), after, before, inc)
 }
 
@@ -367,7 +355,7 @@ func (set *Set) Between(after, before time.Time, inc bool) []time.Time {
 // The inc keyword defines what happens if dt is an occurrence.
 // With inc == True, if dt itself is an occurrence, it will be returned.
 // It is only supported second precision.
-func (set *Set) Before(dt time.Time, inc bool) time.Time {
+func (set *Recurrence) Before(dt time.Time, inc bool) time.Time {
 	return before(set.Iterator(), dt, inc)
 }
 
@@ -376,12 +364,12 @@ func (set *Set) Before(dt time.Time, inc bool) time.Time {
 // The inc keyword defines what happens if dt is an occurrence.
 // With inc == True, if dt itself is an occurrence, it will be returned.
 // It is only supported second precision.
-func (set *Set) After(dt time.Time, inc bool) time.Time {
+func (set *Recurrence) After(dt time.Time, inc bool) time.Time {
 	return after(set.Iterator(), dt, inc)
 }
 
 // StrToRRuleSet converts string to RRuleSet
-func StrToRRuleSet(s string) (*Set, error) {
+func StrToRRuleSet(s string) (*Recurrence, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return nil, errors.New("empty string")
@@ -393,18 +381,18 @@ func StrToRRuleSet(s string) (*Set, error) {
 // StrSliceToRRuleSet converts given str slice to RRuleSet
 // In case there is a time met in any rule without specified time zone, when
 // it is parsed in UTC (see StrSliceToRRuleSetInLoc)
-func StrSliceToRRuleSet(ss []string) (*Set, error) {
+func StrSliceToRRuleSet(ss []string) (*Recurrence, error) {
 	return StrSliceToRRuleSetInLoc(ss, time.UTC)
 }
 
 // StrSliceToRRuleSetInLoc is same as StrSliceToRRuleSet, but by default parses local times
 // in specified default location
-func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, error) {
+func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Recurrence, error) {
 	if len(ss) == 0 {
-		return &Set{}, nil
+		return &Recurrence{}, nil
 	}
 
-	set := Set{}
+	set := Recurrence{}
 	var dtstartLineForRRULE string
 
 	// According to RFC DTSTART is always the first line.
@@ -456,16 +444,10 @@ func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Set, erro
 			if err != nil {
 				return nil, fmt.Errorf("StrToROption failed: %v", err)
 			}
-			r, err := NewRRule(*rOpt)
+			err = set.setRuleOptions(*rOpt)
 			if err != nil {
-				return nil, fmt.Errorf("NewRRule failed: %v", r)
+				return nil, fmt.Errorf("NewRRule failed: %v", err)
 			}
-
-			// If set is all-day, propagate flag to rule so UNTIL and times are formatted correctly
-			if set.allDay && !r.Options.AllDay {
-				r.SetAllDay(true)
-			}
-			set.RRule(r)
 		case "RDATE", "EXDATE":
 			if !set.allDay && containsValueDateParam(rule) {
 				set.SetAllDay(true)

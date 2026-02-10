@@ -321,7 +321,7 @@ func TestSetTrickyTimeZones(t *testing.T) {
 }
 
 func TestSetDtStart(t *testing.T) {
-	ogr := []string{"DTSTART;TZID=America/Los_Angeles:20181115T000000", "RRULE:FREQ=DAILY;INTERVAL=1;WKST=SU;UNTIL=20181117T235959"}
+	ogr := []string{"DTSTART;TZID=America/Los_Angeles:20181115T000000", "RRULE:FREQ=DAILY;INTERVAL=1;WKST=SU;UNTIL=20181118T075959Z"}
 	set, _ := StrSliceToRRuleSet(ogr)
 
 	ogoc := set.All()

@@ -175,6 +175,11 @@ func ExampleStrToRRuleSet() {
 }
 ```
 
+## Unsupported Features
+
+- Floating DATE-TIME for non-all-day events (no TZID and no trailing Z).
+- Mixed floating DATE-TIME inputs for non-all-day rules; outputs are always TZID or UTC.
+
 ## License
 
 This project is licensed under the [MIT](LICENSE) license.

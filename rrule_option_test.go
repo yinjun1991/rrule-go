@@ -10,8 +10,8 @@ import (
 // TestROptionFrequencies tests basic functionality for all frequency types.
 func TestROptionFrequencies(t *testing.T) {
 	testCases := []struct {
-		name string
-		freq Frequency
+		name     string
+		freq     Frequency
 		expected string
 	}{
 		{"YEARLY", YEARLY, "FREQ=YEARLY"},
@@ -39,8 +39,8 @@ func TestROptionFrequencies(t *testing.T) {
 // TestROptionBasicParameters tests basic parameters.
 func TestROptionBasicParameters(t *testing.T) {
 	testCases := []struct {
-		name string
-		option ROption
+		name     string
+		option   ROption
 		expected string
 	}{
 		{
@@ -78,8 +78,8 @@ func TestROptionBasicParameters(t *testing.T) {
 // TestROptionByRules tests BY* rules.
 func TestROptionByRules(t *testing.T) {
 	testCases := []struct {
-		name string
-		option ROption
+		name     string
+		option   ROption
 		expected string
 	}{
 		{
@@ -115,10 +115,10 @@ func TestROptionByRules(t *testing.T) {
 		{
 			"Multiple BY rules",
 			ROption{
-				Freq: MONTHLY,
+				Freq:       MONTHLY,
 				Bymonthday: []int{1, 15},
-				Byhour: []int{9, 17},
-				Byminute: []int{0},
+				Byhour:     []int{9, 17},
+				Byminute:   []int{0},
 			},
 			"FREQ=MONTHLY;BYMONTHDAY=1,15;BYHOUR=9,17;BYMINUTE=0",
 		},
@@ -137,10 +137,10 @@ func TestROptionByRules(t *testing.T) {
 // TestROptionNonAllDayWithTimezone tests timezone handling for timed events.
 func TestROptionNonAllDayWithTimezone(t *testing.T) {
 	testCases := []struct {
-		name string
-		tz *time.Location
+		name    string
+		tz      *time.Location
 		dtstart time.Time
-		until time.Time
+		until   time.Time
 	}{
 		{
 			"UTC",
@@ -165,10 +165,10 @@ func TestROptionNonAllDayWithTimezone(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			option := ROption{
-				Freq: DAILY,
+				Freq:    DAILY,
 				Dtstart: tc.dtstart,
-				Until: tc.until,
-				AllDay: false,
+				Until:   tc.until,
+				AllDay:  false,
 			}
 
 			output := option.String()
@@ -204,10 +204,10 @@ func TestROptionNonAllDayWithTimezone(t *testing.T) {
 // TestROptionStringParsing tests string parsing.
 func TestROptionStringParsing(t *testing.T) {
 	testCases := []struct {
-		name string
-		input string
+		name          string
+		input         string
 		expectedError bool
-		validateFunc func(*testing.T, *ROption)
+		validateFunc  func(*testing.T, *ROption)
 	}{
 		{
 			"Simple RRULE",
@@ -273,6 +273,12 @@ func TestROptionStringParsing(t *testing.T) {
 			true,
 			nil,
 		},
+		{
+			"TZID DTSTART with non-UTC UNTIL - should error",
+			"DTSTART;TZID=Asia/Tokyo:20231201T090000\nRRULE:FREQ=WEEKLY;UNTIL=20231225T090000",
+			true,
+			nil,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -326,11 +332,15 @@ func TestROptionStringParsingWithTimezone(t *testing.T) {
 		},
 		{
 			"UNTIL in JST",
-			"DTSTART;TZID=Asia/Tokyo:20231201T090000\nRRULE:FREQ=WEEKLY;UNTIL=20231225T090000",
+			"DTSTART;TZID=Asia/Tokyo:20231201T090000\nRRULE:FREQ=WEEKLY;UNTIL=20231225T000000Z",
 			func(t *testing.T, opt *ROption) {
-				expected := time.Date(2023, 12, 25, 9, 0, 0, 0, jstLoc)
+				expectedDtstart := time.Date(2023, 12, 1, 9, 0, 0, 0, jstLoc)
+				if !opt.Dtstart.Equal(expectedDtstart) {
+					t.Errorf("Expected Dtstart in JST: %v, got %v", expectedDtstart, opt.Dtstart)
+				}
+				expected := time.Date(2023, 12, 25, 0, 0, 0, 0, time.UTC)
 				if !opt.Until.Equal(expected) {
-					t.Errorf("Expected Until in JST: %v, got %v", expected, opt.Until)
+					t.Errorf("Expected Until in UTC: %v, got %v", expected, opt.Until)
 				}
 			},
 		},
@@ -374,7 +384,7 @@ func TestROptionEdgeCases(t *testing.T) {
 
 	t.Run("Negative values in BY rules", func(t *testing.T) {
 		option := ROption{
-			Freq: MONTHLY,
+			Freq:       MONTHLY,
 			Bymonthday: []int{-1, -7, 15}, // Negative values count from month end.
 		}
 		output := option.RRuleString()
@@ -386,9 +396,9 @@ func TestROptionEdgeCases(t *testing.T) {
 
 	t.Run("Large numbers", func(t *testing.T) {
 		option := ROption{
-			Freq: YEARLY,
-			Interval: 999,
-			Count: 9999,
+			Freq:      YEARLY,
+			Interval:  999,
+			Count:     9999,
 			Byyearday: []int{1, 100, 365, -1},
 		}
 		output := option.RRuleString()
@@ -404,37 +414,37 @@ func TestROptionEdgeCases(t *testing.T) {
 // TestROptionRoundTrip tests round-trip consistency.
 func TestROptionRoundTrip(t *testing.T) {
 	testCases := []struct {
-		name string
+		name   string
 		option ROption
 	}{
 		{
 			"Simple daily",
 			ROption{
-				Freq: DAILY,
-				Count: 5,
+				Freq:    DAILY,
+				Count:   5,
 				Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 			},
 		},
 		{
 			"Complex monthly",
 			ROption{
-				Freq: MONTHLY,
-				Interval: 2,
+				Freq:       MONTHLY,
+				Interval:   2,
 				Bymonthday: []int{1, 15},
-				Byhour: []int{9, 17},
-				Wkst: SU,
-				Dtstart: time.Date(2023, 6, 1, 9, 0, 0, 0, time.UTC),
-				Until: time.Date(2024, 6, 1, 9, 0, 0, 0, time.UTC),
+				Byhour:     []int{9, 17},
+				Wkst:       SU,
+				Dtstart:    time.Date(2023, 6, 1, 9, 0, 0, 0, time.UTC),
+				Until:      time.Date(2024, 6, 1, 9, 0, 0, 0, time.UTC),
 			},
 		},
 		{
 			"All-day event",
 			ROption{
-				Freq: WEEKLY,
+				Freq:      WEEKLY,
 				Byweekday: []Weekday{MO, WE, FR},
-				Count: 10,
-				AllDay: true,
-				Dtstart: time.Date(2023, 3, 1, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
+				Count:     10,
+				AllDay:    true,
+				Dtstart:   time.Date(2023, 3, 1, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
 			},
 		},
 	}
@@ -579,9 +589,9 @@ func TestAllDayStringWithUntil(t *testing.T) {
 			expected: "UNTIL=20230305",
 		},
 		{
-			name:     "Different timezone UNTIL",
-			dtstart:  time.Date(2023, 4, 10, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
-			until:    time.Date(2023, 4, 20, 8, 15, 0, 0, time.FixedZone("JST", 9*3600)),
+			name:    "Different timezone UNTIL",
+			dtstart: time.Date(2023, 4, 10, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
+			until:   time.Date(2023, 4, 20, 8, 15, 0, 0, time.FixedZone("JST", 9*3600)),
 			// UNTIL is normalized to the DTSTART location for all-day DATE semantics.
 			expected: "UNTIL=20230419",
 		},

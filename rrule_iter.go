@@ -6,7 +6,7 @@ import (
 )
 
 type iterInfo struct {
-	rrule       *RRule
+	recurrence  *Recurrence
 	lastyear    int
 	lastmonth   time.Month
 	yearlen     int
@@ -30,7 +30,7 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 		info.nextyearlen = 365 + isLeap(year+1)
 		info.firstyday = time.Date(
 			year, time.January, 1, 0, 0, 0, 0,
-			info.rrule.dtstart.Location())
+			info.recurrence.dtstart.Location())
 		info.yearweekday = toPyWeekday(info.firstyday.Weekday())
 		info.wdaymask = WDAYMASK[info.yearweekday:]
 		if info.yearlen == 365 {
@@ -44,24 +44,24 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 			info.nmdaymask = NMDAY366MASK
 			info.mrange = M366RANGE
 		}
-		if len(info.rrule.byweekno) == 0 {
+		if len(info.recurrence.byweekno) == 0 {
 			info.wnomask = nil
 		} else {
 			info.wnomask = make([]int, info.yearlen+7)
-			firstwkst := pymod(7-info.yearweekday+info.rrule.wkst, 7)
+			firstwkst := pymod(7-info.yearweekday+info.recurrence.wkst, 7)
 			no1wkst := firstwkst
 			var wyearlen int
 			if no1wkst >= 4 {
 				no1wkst = 0
 				// Number of days in the year, plus the days we got from last year.
-				wyearlen = info.yearlen + pymod(info.yearweekday-info.rrule.wkst, 7)
+				wyearlen = info.yearlen + pymod(info.yearweekday-info.recurrence.wkst, 7)
 			} else {
 				// Number of days in the year, minus the days we left in last year.
 				wyearlen = info.yearlen - no1wkst
 			}
 			div, mod := divmod(wyearlen, 7)
 			numweeks := div + mod/4
-			for _, n := range info.rrule.byweekno {
+			for _, n := range info.recurrence.byweekno {
 				if n < 0 {
 					n += numweeks + 1
 				}
@@ -80,12 +80,12 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 				for j := 0; j < 7; j++ {
 					info.wnomask[i] = 1
 					i++
-					if info.wdaymask[i] == info.rrule.wkst {
+					if info.wdaymask[i] == info.recurrence.wkst {
 						break
 					}
 				}
 			}
-			if contains(info.rrule.byweekno, 1) {
+			if contains(info.recurrence.byweekno, 1) {
 				// Check week number 1 of next year as well
 				// TODO: Check -numweeks for next year.
 				i := no1wkst + numweeks*7
@@ -98,7 +98,7 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 					for j := 0; j < 7; j++ {
 						info.wnomask[i] = 1
 						i++
-						if info.wdaymask[i] == info.rrule.wkst {
+						if info.wdaymask[i] == info.recurrence.wkst {
 							break
 						}
 					}
@@ -112,22 +112,22 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 				// days from last year's last week number in
 				// this year.
 				var lnumweeks int
-				if !contains(info.rrule.byweekno, -1) {
+				if !contains(info.recurrence.byweekno, -1) {
 					lyearweekday := toPyWeekday(time.Date(
 						year-1, 1, 1, 0, 0, 0, 0,
-						info.rrule.dtstart.Location()).Weekday())
-					lno1wkst := pymod(7-lyearweekday+info.rrule.wkst, 7)
+						info.recurrence.dtstart.Location()).Weekday())
+					lno1wkst := pymod(7-lyearweekday+info.recurrence.wkst, 7)
 					lyearlen := 365 + isLeap(year-1)
 					if lno1wkst >= 4 {
 						lno1wkst = 0
-						lnumweeks = 52 + pymod(lyearlen+pymod(lyearweekday-info.rrule.wkst, 7), 7)/4
+						lnumweeks = 52 + pymod(lyearlen+pymod(lyearweekday-info.recurrence.wkst, 7), 7)/4
 					} else {
 						lnumweeks = 52 + pymod(info.yearlen-no1wkst, 7)/4
 					}
 				} else {
 					lnumweeks = -1
 				}
-				if contains(info.rrule.byweekno, lnumweeks) {
+				if contains(info.recurrence.byweekno, lnumweeks) {
 					for i := 0; i < no1wkst; i++ {
 						info.wnomask[i] = 1
 					}
@@ -135,17 +135,17 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 			}
 		}
 	}
-	if len(info.rrule.bynweekday) != 0 && (month != info.lastmonth || year != info.lastyear) {
+	if len(info.recurrence.bynweekday) != 0 && (month != info.lastmonth || year != info.lastyear) {
 		var ranges [][]int
-		if info.rrule.freq == YEARLY {
-			if len(info.rrule.bymonth) != 0 {
-				for _, month := range info.rrule.bymonth {
+		if info.recurrence.freq == YEARLY {
+			if len(info.recurrence.bymonth) != 0 {
+				for _, month := range info.recurrence.bymonth {
 					ranges = append(ranges, info.mrange[month-1:month+1])
 				}
 			} else {
 				ranges = [][]int{{0, info.yearlen}}
 			}
-		} else if info.rrule.freq == MONTHLY {
+		} else if info.recurrence.freq == MONTHLY {
 			ranges = [][]int{info.mrange[month-1 : month+1]}
 		}
 		if len(ranges) != 0 {
@@ -155,7 +155,7 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 			for _, x := range ranges {
 				first, last := x[0], x[1]
 				last--
-				for _, y := range info.rrule.bynweekday {
+				for _, y := range info.recurrence.bynweekday {
 					wday, n := y.weekday, y.n
 					var i int
 					if n < 0 {
@@ -172,10 +172,10 @@ func (info *iterInfo) rebuild(year int, month time.Month) {
 			}
 		}
 	}
-	if len(info.rrule.byeaster) != 0 {
+	if len(info.recurrence.byeaster) != 0 {
 		info.eastermask = make([]int, info.yearlen+7)
 		eyday := easter(year).YearDay() - 1
-		for _, offset := range info.rrule.byeaster {
+		for _, offset := range info.recurrence.byeaster {
 			info.eastermask[eyday+offset] = 1
 		}
 	}
@@ -201,7 +201,7 @@ func (info *iterInfo) calcDaySet(freq Frequency, year int, month time.Month, day
 			// if (not (0 <= i < self.yearlen) or
 			//     self.wdaymask[i] == self.rrule._wkst):
 			//  This will cross the year boundary, if necessary.
-			if info.wdaymask[i] == info.rrule.wkst {
+			if info.wdaymask[i] == info.recurrence.wkst {
 				break
 			}
 
@@ -220,22 +220,22 @@ func (info *iterInfo) calcDaySet(freq Frequency, year int, month time.Month, day
 func (info *iterInfo) fillTimeSet(set *[]time.Time, freq Frequency, hour, minute, second int) {
 	switch freq {
 	case HOURLY:
-		prepareTimeSet(set, len(info.rrule.byminute)*len(info.rrule.bysecond))
-		for _, minute := range info.rrule.byminute {
-			for _, second := range info.rrule.bysecond {
-				*set = append(*set, time.Date(1, 1, 1, hour, minute, second, 0, info.rrule.dtstart.Location()))
+		prepareTimeSet(set, len(info.recurrence.byminute)*len(info.recurrence.bysecond))
+		for _, minute := range info.recurrence.byminute {
+			for _, second := range info.recurrence.bysecond {
+				*set = append(*set, time.Date(1, 1, 1, hour, minute, second, 0, info.recurrence.dtstart.Location()))
 			}
 		}
 		sort.Sort(timeSlice(*set))
 	case MINUTELY:
-		prepareTimeSet(set, len(info.rrule.bysecond))
-		for _, second := range info.rrule.bysecond {
-			*set = append(*set, time.Date(1, 1, 1, hour, minute, second, 0, info.rrule.dtstart.Location()))
+		prepareTimeSet(set, len(info.recurrence.bysecond))
+		for _, second := range info.recurrence.bysecond {
+			*set = append(*set, time.Date(1, 1, 1, hour, minute, second, 0, info.recurrence.dtstart.Location()))
 		}
 		sort.Sort(timeSlice(*set))
 	case SECONDLY:
 		prepareTimeSet(set, 1)
-		*set = append(*set, time.Date(1, 1, 1, hour, minute, second, 0, info.rrule.dtstart.Location()))
+		*set = append(*set, time.Date(1, 1, 1, hour, minute, second, 0, info.recurrence.dtstart.Location()))
 	default:
 		prepareTimeSet(set, 0)
 	}
@@ -264,7 +264,7 @@ func (iterator *rIterator) generate() {
 		return
 	}
 
-	r := iterator.ii.rrule
+	r := iterator.ii.recurrence
 
 	for iterator.remain.Len() == 0 {
 		// Get dayset with the right frequency
