@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,31 +35,309 @@ type Recurrence struct {
 	rdate                   []time.Time
 	exdate                  []time.Time
 	allDay                  bool
+	intervalExplicit        bool
+	bymonthExplicit         bool
+	bymonthdayExplicit      bool
+	byweekdayExplicit       bool
+	byhourExplicit          bool
+	byminuteExplicit        bool
+	bysecondExplicit        bool
 	hasRule                 bool
 }
 
-func New(option ROption) *Recurrence {
-	rec, err := newRecurrence(option)
-	if err != nil {
-		return nil
-	}
-	return rec
-}
-
-func Parse(lines ...string) *Recurrence {
-	set, err := StrSliceToRRuleSet(lines)
-	if err != nil {
-		return nil
-	}
-	return set
-}
-
-func newRecurrence(option ROption) (*Recurrence, error) {
+// New builds a recurrence from ROption.
+// Returns an error when option validation fails; otherwise returns a Recurrence
+// even if the option contains no rule parts.
+func New(option ROption) (*Recurrence, error) {
 	rec := &Recurrence{}
 	if err := rec.setRuleOptions(option); err != nil {
 		return nil, err
 	}
 	return rec, nil
+}
+
+// NewWithDTStart builds a recurrence using the provided dtstart and allDay flags.
+// Any DTSTART lines in the input are ignored; the dtstart argument is authoritative.
+// Returns an error when the input lines are malformed; returns an empty Recurrence
+// when lines are empty or normalize to no usable rules.
+func NewWithDTStart(dtstart time.Time, allDay bool, lines ...string) (*Recurrence, error) {
+	rec := &Recurrence{}
+	rec.SetAllDay(allDay)
+	rec.DTStart(dtstart)
+
+	if len(lines) == 0 {
+		return rec, nil
+	}
+
+	normalized, err := NormalizeRecurrenceRuleset(lines)
+	if err != nil {
+		return nil, err
+	}
+	if len(normalized) == 0 {
+		return rec, nil
+	}
+
+	filtered := make([]string, 0, len(normalized))
+	for _, line := range normalized {
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(line)), "DTSTART") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	if len(filtered) == 0 {
+		return rec, nil
+	}
+
+	defaultLoc := time.UTC
+	if !rec.GetDTStart().IsZero() {
+		defaultLoc = rec.GetDTStart().Location()
+	}
+
+	var dtstartLineForRRULE string
+	if !rec.GetDTStart().IsZero() {
+		if rec.allDay {
+			dtstartLineForRRULE = fmt.Sprintf("DTSTART;VALUE=DATE:%s", rec.GetDTStart().Format(DateFormat))
+		} else {
+			dtstartLineForRRULE = fmt.Sprintf("DTSTART%s", timeToRFCDatetimeStr(rec.GetDTStart()))
+		}
+	}
+
+	for _, line := range filtered {
+		name, err := processRRuleName(line)
+		if err != nil {
+			return nil, err
+		}
+		rule := line[len(name)+1:]
+
+		switch name {
+		case "RRULE":
+			rruleInput := line
+			if dtstartLineForRRULE != "" {
+				rruleInput = dtstartLineForRRULE + "\n" + line
+			}
+			rOpt, err := parseROptionFromString(rruleInput)
+			if err != nil {
+				return nil, fmt.Errorf("parseROption failed: %v", err)
+			}
+			err = rec.setRuleOptions(*rOpt)
+			if err != nil {
+				return nil, fmt.Errorf("NewRRule failed: %v", err)
+			}
+		case "RDATE", "EXDATE":
+			if !rec.allDay && containsValueDateParam(rule) {
+				rec.SetAllDay(true)
+			}
+
+			ts, err := StrToDatesInLoc(rule, defaultLoc)
+			if err != nil {
+				return nil, fmt.Errorf("strToDates failed: %v", err)
+			}
+			for _, t := range ts {
+				if name == "RDATE" {
+					rec.RDate(t)
+				} else {
+					rec.ExDate(t)
+				}
+			}
+		}
+	}
+
+	return rec, nil
+}
+
+// Parse builds a recurrence from lines.
+// Returns an error when lines are malformed; returns an empty Recurrence when
+// lines are empty or normalize to no usable rules.
+func Parse(lines ...string) (*Recurrence, error) {
+	if len(lines) == 0 {
+		return &Recurrence{}, nil
+	}
+
+	normalized, err := NormalizeRecurrenceRuleset(lines)
+	if err != nil {
+		return nil, err
+	}
+	if len(normalized) == 0 {
+		return &Recurrence{}, nil
+	}
+	lines = normalized
+
+	defaultLoc := time.UTC
+	set := Recurrence{}
+	var dtstartLineForRRULE string
+
+	firstName, err := processRRuleName(lines[0])
+	if err != nil {
+		return nil, err
+	}
+	if firstName == "DTSTART" {
+		dtstartField := lines[0][len(firstName)+1:]
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dtstartField)), "VALUE=DATE:") {
+			set.SetAllDay(true)
+		}
+
+		dt, err := StrToDtStart(dtstartField, defaultLoc)
+		if err != nil {
+			return nil, fmt.Errorf("StrToDtStart failed: %v", err)
+		}
+		defaultLoc = dt.Location()
+		set.DTStart(dt)
+		if !set.GetDTStart().IsZero() {
+			if set.allDay {
+				dtstartLineForRRULE = fmt.Sprintf("DTSTART;VALUE=DATE:%s", set.GetDTStart().Format(DateFormat))
+			} else {
+				dtstartLineForRRULE = fmt.Sprintf("DTSTART%s", timeToRFCDatetimeStr(set.GetDTStart()))
+			}
+		}
+		lines = lines[1:]
+	}
+
+	for _, line := range lines {
+		name, err := processRRuleName(line)
+		if err != nil {
+			return nil, err
+		}
+		rule := line[len(name)+1:]
+
+		switch name {
+		case "RRULE":
+			rruleInput := line
+			if dtstartLineForRRULE != "" {
+				rruleInput = dtstartLineForRRULE + "\n" + line
+			}
+			rOpt, err := parseROptionFromString(rruleInput)
+			if err != nil {
+				return nil, fmt.Errorf("parseROption failed: %v", err)
+			}
+			err = set.setRuleOptions(*rOpt)
+			if err != nil {
+				return nil, fmt.Errorf("NewRRule failed: %v", err)
+			}
+		case "RDATE", "EXDATE":
+			if !set.allDay && containsValueDateParam(rule) {
+				set.SetAllDay(true)
+			}
+
+			ts, err := StrToDatesInLoc(rule, defaultLoc)
+			if err != nil {
+				return nil, fmt.Errorf("strToDates failed: %v", err)
+			}
+			for _, t := range ts {
+				if name == "RDATE" {
+					set.RDate(t)
+				} else {
+					set.ExDate(t)
+				}
+			}
+		}
+	}
+
+	return &set, nil
+}
+
+// NormalizeRecurrenceRuleset cleans and normalizes recurrence lines.
+// It trims whitespace, removes empty entries, normalizes RRULE prefixing,
+// and keeps only the first RRULE when multiple are present.
+func NormalizeRecurrenceRuleset(ruleset []string) ([]string, error) {
+	if len(ruleset) == 0 {
+		return nil, nil
+	}
+
+	normalized := make([]string, 0, len(ruleset))
+	foundRRule := false
+
+	for _, rule := range ruleset {
+		rule = strings.TrimSpace(rule)
+		if rule == "" {
+			continue
+		}
+
+		upperRule := strings.ToUpper(rule)
+		if strings.HasPrefix(upperRule, "DTSTART") {
+			normalized = append(normalized, rule)
+			continue
+		}
+
+		normalizedRule, err := normalizeRecurrenceLine(rule)
+		if err != nil {
+			return nil, fmt.Errorf("invalid recurrence string '%s': %w", rule, err)
+		}
+
+		if strings.HasPrefix(strings.ToUpper(normalizedRule), "RRULE:") {
+			if foundRRule {
+				continue
+			}
+			foundRRule = true
+		}
+
+		normalized = append(normalized, normalizedRule)
+	}
+
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+
+	return normalized, nil
+}
+
+// normalizeRecurrenceLine normalizes a single RRULE/RDATE/EXDATE line.
+func normalizeRecurrenceLine(rule string) (string, error) {
+	upperRule := strings.ToUpper(rule)
+
+	if strings.HasPrefix(upperRule, "DTSTART") {
+		return rule, nil
+	}
+	if strings.HasPrefix(upperRule, "RRULE:") {
+		content := rule[len("RRULE:"):]
+		if err := validateRRuleProperties(content); err != nil {
+			return "", err
+		}
+		return rule, nil
+	}
+	if strings.HasPrefix(upperRule, "RDATE:") || strings.HasPrefix(upperRule, "RDATE;") ||
+		strings.HasPrefix(upperRule, "EXDATE:") || strings.HasPrefix(upperRule, "EXDATE;") {
+		return rule, nil
+	}
+	if isRRuleProperties(rule) {
+		if err := validateRRuleProperties(rule); err != nil {
+			return "", err
+		}
+		return "RRULE:" + rule, nil
+	}
+	return "", fmt.Errorf("unrecognized rule format")
+}
+
+// validateRRuleProperties validates the RRULE properties without the RRULE prefix.
+func validateRRuleProperties(content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return fmt.Errorf("empty rrule content")
+	}
+
+	upperContent := strings.ToUpper(content)
+	if !strings.Contains(upperContent, "FREQ=") {
+		return fmt.Errorf("rrule must contain FREQ parameter")
+	}
+
+	return nil
+}
+
+// isRRuleProperties reports whether a string looks like RRULE properties.
+func isRRuleProperties(content string) bool {
+	upperContent := strings.ToUpper(strings.TrimSpace(content))
+	return strings.Contains(upperContent, "FREQ=") &&
+		!strings.HasPrefix(upperContent, "RRULE:") &&
+		!strings.HasPrefix(upperContent, "RDATE:") &&
+		!strings.HasPrefix(upperContent, "EXDATE:") &&
+		!strings.HasPrefix(upperContent, "DTSTART")
+}
+
+func ParseRRuleString(rfcString string) (*Recurrence, error) {
+	option, err := parseROptionFromString(rfcString)
+	if err != nil {
+		return nil, err
+	}
+	return New(*option)
 }
 
 func (r *Recurrence) normalizeAllDayTimes() {
@@ -99,120 +378,143 @@ func (r *Recurrence) rebuildRule() {
 	r.hasRule = true
 }
 
-func (r *Recurrence) applyRule(arg ROption) error {
-	if err := validateBounds(arg); err != nil {
+func (r *Recurrence) applyRule(option ROption) error {
+	if err := validateBounds(option); err != nil {
 		return err
 	}
-	r.allDay = arg.AllDay
-
-	r.freq = arg.Freq
-
-	if arg.Interval < 1 {
-		arg.Interval = 1
+	if option.AllDay {
+		option.Byhour = nil
+		option.Byminute = nil
+		option.Bysecond = nil
+		if option.Freq >= HOURLY {
+			option.Freq = DAILY
+		}
 	}
-	r.interval = arg.Interval
+	r.allDay = option.AllDay
+	r.intervalExplicit = option.Interval > 0
+	r.bymonthExplicit = len(option.Bymonth) != 0
+	r.bymonthdayExplicit = len(option.Bymonthday) != 0
+	r.byweekdayExplicit = len(option.Byweekday) != 0
+	r.byhourExplicit = len(option.Byhour) != 0
+	r.byminuteExplicit = len(option.Byminute) != 0
+	r.bysecondExplicit = len(option.Bysecond) != 0
 
-	if arg.Count < 0 {
-		arg.Count = 0
+	r.freq = option.Freq
+
+	if option.Interval < 1 {
+		option.Interval = 1
 	}
-	r.count = arg.Count
+	r.interval = option.Interval
 
-	if arg.Dtstart.IsZero() {
-		arg.Dtstart = time.Now().UTC()
+	if option.Count < 0 {
+		option.Count = 0
+	}
+	r.count = option.Count
+
+	if option.Dtstart.IsZero() {
+		option.Dtstart = time.Now().UTC()
 	}
 
-	if arg.AllDay {
-		year, month, day := arg.Dtstart.Date()
-		arg.Dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	if option.AllDay {
+		year, month, day := option.Dtstart.Date()
+		option.Dtstart = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 	} else {
-		arg.Dtstart = arg.Dtstart.Truncate(time.Second)
+		option.Dtstart = option.Dtstart.Truncate(time.Second)
 	}
-	r.dtstart = arg.Dtstart
+	r.dtstart = option.Dtstart
 
-	if arg.Until.IsZero() {
+	if option.Until.IsZero() {
 		r.until = r.dtstart.Add(time.Duration(1<<63 - 1))
 	} else {
-		if arg.AllDay {
-			year, month, day := arg.Until.Date()
-			arg.Until = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		if option.AllDay {
+			year, month, day := option.Until.Date()
+			option.Until = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 		} else {
-			arg.Until = arg.Until.Truncate(time.Second)
+			option.Until = option.Until.Truncate(time.Second)
 		}
-		r.until = arg.Until
+		r.until = option.Until
 	}
 
-	r.wkst = arg.Wkst.weekday
+	if option.RDate != nil {
+		r.SetRDates(option.RDate)
+	}
+	if option.EXDate != nil {
+		r.SetExDates(option.EXDate)
+	}
+
+	r.wkst = option.Wkst.weekday
 	r.bymonthday = nil
 	r.bynmonthday = nil
 	r.byweekday = nil
 	r.bynweekday = nil
-	r.bysetpos = arg.Bysetpos
+	r.bysetpos = option.Bysetpos
 
-	if len(arg.Byweekno) == 0 &&
-		len(arg.Bymonthday) == 0 &&
-		len(arg.Byweekday) == 0 &&
-		len(arg.Byeaster) == 0 {
+	if len(option.Byweekno) == 0 &&
+		len(option.Bymonthday) == 0 &&
+		len(option.Byyearday) == 0 &&
+		len(option.Byweekday) == 0 &&
+		len(option.Byeaster) == 0 {
 		if r.freq == YEARLY {
-			if len(arg.Bymonth) == 0 {
-				arg.Bymonth = []int{int(r.dtstart.Month())}
+			if len(option.Bymonth) == 0 {
+				option.Bymonth = []int{int(r.dtstart.Month())}
 			}
-			arg.Bymonthday = []int{r.dtstart.Day()}
+			option.Bymonthday = []int{r.dtstart.Day()}
 		} else if r.freq == MONTHLY {
-			arg.Bymonthday = []int{r.dtstart.Day()}
+			option.Bymonthday = []int{r.dtstart.Day()}
 		} else if r.freq == WEEKLY {
-			arg.Byweekday = []Weekday{{weekday: toPyWeekday(r.dtstart.Weekday())}}
+			option.Byweekday = []Weekday{{weekday: toPyWeekday(r.dtstart.Weekday())}}
 		}
 	}
-	r.bymonth = arg.Bymonth
-	r.byyearday = arg.Byyearday
-	r.byeaster = arg.Byeaster
-	for _, mday := range arg.Bymonthday {
+	r.bymonth = option.Bymonth
+	r.byyearday = option.Byyearday
+	r.byeaster = option.Byeaster
+	for _, mday := range option.Bymonthday {
 		if mday > 0 {
 			r.bymonthday = append(r.bymonthday, mday)
 		} else if mday < 0 {
 			r.bynmonthday = append(r.bynmonthday, mday)
 		}
 	}
-	r.byweekno = arg.Byweekno
-	for _, wday := range arg.Byweekday {
+	r.byweekno = option.Byweekno
+	for _, wday := range option.Byweekday {
 		if wday.n == 0 || r.freq > MONTHLY {
 			r.byweekday = append(r.byweekday, wday.weekday)
 		} else {
 			r.bynweekday = append(r.bynweekday, wday)
 		}
 	}
-	if len(arg.Byhour) == 0 {
+	if len(option.Byhour) == 0 {
 		if r.freq < HOURLY {
-			if arg.AllDay {
+			if option.AllDay {
 				r.byhour = []int{0}
 			} else {
 				r.byhour = []int{r.dtstart.Hour()}
 			}
 		}
 	} else {
-		r.byhour = arg.Byhour
+		r.byhour = option.Byhour
 	}
-	if len(arg.Byminute) == 0 {
+	if len(option.Byminute) == 0 {
 		if r.freq < MINUTELY {
-			if arg.AllDay {
+			if option.AllDay {
 				r.byminute = []int{0}
 			} else {
 				r.byminute = []int{r.dtstart.Minute()}
 			}
 		}
 	} else {
-		r.byminute = arg.Byminute
+		r.byminute = option.Byminute
 	}
-	if len(arg.Bysecond) == 0 {
+	if len(option.Bysecond) == 0 {
 		if r.freq < SECONDLY {
-			if arg.AllDay {
+			if option.AllDay {
 				r.bysecond = []int{0}
 			} else {
 				r.bysecond = []int{r.dtstart.Second()}
 			}
 		}
 	} else {
-		r.bysecond = arg.Bysecond
+		r.bysecond = option.Bysecond
 	}
 
 	r.timeset = nil
@@ -250,6 +552,10 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 		Byeaster:  cloneIntSlice(r.byeaster),
 	}
 
+	if !r.intervalExplicit && r.interval == 1 {
+		option.Interval = 0
+	}
+
 	if !r.until.IsZero() {
 		maxUntil := r.dtstart.Add(time.Duration(1<<63 - 1))
 		if !r.until.Equal(maxUntil) {
@@ -257,17 +563,39 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 		}
 	}
 
-	byMonthDay := make([]int, 0, len(r.bymonthday)+len(r.bynmonthday))
-	byMonthDay = append(byMonthDay, r.bymonthday...)
-	byMonthDay = append(byMonthDay, r.bynmonthday...)
-	option.Bymonthday = byMonthDay
-
-	byWeekday := make([]Weekday, 0, len(r.byweekday)+len(r.bynweekday))
-	for _, wday := range r.byweekday {
-		byWeekday = append(byWeekday, Weekday{weekday: wday})
+	if !r.bymonthExplicit {
+		option.Bymonth = nil
 	}
-	byWeekday = append(byWeekday, r.bynweekday...)
-	option.Byweekday = byWeekday
+
+	if r.bymonthdayExplicit {
+		byMonthDay := make([]int, 0, len(r.bymonthday)+len(r.bynmonthday))
+		byMonthDay = append(byMonthDay, r.bymonthday...)
+		byMonthDay = append(byMonthDay, r.bynmonthday...)
+		option.Bymonthday = byMonthDay
+	} else {
+		option.Bymonthday = nil
+	}
+
+	if r.byweekdayExplicit {
+		byWeekday := make([]Weekday, 0, len(r.byweekday)+len(r.bynweekday))
+		for _, wday := range r.byweekday {
+			byWeekday = append(byWeekday, Weekday{weekday: wday})
+		}
+		byWeekday = append(byWeekday, r.bynweekday...)
+		option.Byweekday = byWeekday
+	} else {
+		option.Byweekday = nil
+	}
+
+	if !r.byhourExplicit {
+		option.Byhour = nil
+	}
+	if !r.byminuteExplicit {
+		option.Byminute = nil
+	}
+	if !r.bysecondExplicit {
+		option.Bysecond = nil
+	}
 
 	return option
 }
@@ -324,17 +652,19 @@ func (set *Recurrence) Strings() []string {
 		res = append(res, str)
 	}
 
-	str = set.RRuleString()
+	if set.hasRule {
+		str = set.RRuleString()
+		if str != "" {
+			res = append(res, str)
+		}
+	}
+
+	str = set.RDateString()
 	if str != "" {
 		res = append(res, str)
 	}
 
 	str = set.EXDateString()
-	if str != "" {
-		res = append(res, str)
-	}
-
-	str = set.RDateString()
 	if str != "" {
 		res = append(res, str)
 	}
@@ -373,8 +703,7 @@ func (set *Recurrence) DTStartString() string {
 // RRuleString returns RRULE serialized as a single line without DTSTART.
 // Example: RRULE:FREQ=DAILY;COUNT=5
 func (set *Recurrence) RRuleString() string {
-	option := set.ruleOptionFromState()
-	return fmt.Sprintf("RRULE:%s", rruleStringFromOption(&option))
+	return fmt.Sprintf("RRULE:%s", set.rrulePropertiesString())
 }
 
 // EXDateString returns EXDATE lines serialized as a single string.
@@ -394,22 +723,6 @@ func (set *Recurrence) EXDateString() string {
 			values = append(values, item.Format(DateFormat))
 		}
 		return fmt.Sprintf("EXDATE;VALUE=DATE:%s", strings.Join(values, ","))
-	}
-
-	if !set.dtstart.IsZero() {
-		refLoc := set.dtstart.Location()
-		if refLoc == time.UTC {
-			values := make([]string, 0, len(set.exdate))
-			for _, item := range set.exdate {
-				values = append(values, item.In(time.UTC).Format(DateTimeFormat))
-			}
-			return fmt.Sprintf("EXDATE:%s", strings.Join(values, ","))
-		}
-		values := make([]string, 0, len(set.exdate))
-		for _, item := range set.exdate {
-			values = append(values, item.In(refLoc).Format(LocalDateTimeFormat))
-		}
-		return fmt.Sprintf("EXDATE;TZID=%s:%s", refLoc.String(), strings.Join(values, ","))
 	}
 
 	valuesByTZID := make(map[string][]string)
@@ -457,22 +770,6 @@ func (set *Recurrence) RDateString() string {
 		return fmt.Sprintf("RDATE;VALUE=DATE:%s", strings.Join(values, ","))
 	}
 
-	if !set.dtstart.IsZero() {
-		refLoc := set.dtstart.Location()
-		if refLoc == time.UTC {
-			values := make([]string, 0, len(set.rdate))
-			for _, item := range set.rdate {
-				values = append(values, item.In(time.UTC).Format(DateTimeFormat))
-			}
-			return fmt.Sprintf("RDATE:%s", strings.Join(values, ","))
-		}
-		values := make([]string, 0, len(set.rdate))
-		for _, item := range set.rdate {
-			values = append(values, item.In(refLoc).Format(LocalDateTimeFormat))
-		}
-		return fmt.Sprintf("RDATE;TZID=%s:%s", refLoc.String(), strings.Join(values, ","))
-	}
-
 	valuesByTZID := make(map[string][]string)
 	var tzidOrder []string
 	for _, item := range set.rdate {
@@ -502,6 +799,7 @@ func (set *Recurrence) RDateString() string {
 // DTStart sets dtstart property for set.
 // It will be truncated to second precision.
 func (set *Recurrence) DTStart(dtstart time.Time) {
+	prevDtstart := set.dtstart
 	// Handle AllDay events: convert to floating time (UTC) as per RFC 5545
 	if set.allDay {
 		// All-day events should use floating time (no timezone binding)
@@ -514,6 +812,12 @@ func (set *Recurrence) DTStart(dtstart time.Time) {
 	}
 
 	if set.hasRule {
+		if !set.until.IsZero() && !prevDtstart.IsZero() {
+			maxUntil := prevDtstart.Add(time.Duration(1<<63 - 1))
+			if set.until.Equal(maxUntil) {
+				set.until = set.dtstart.Add(time.Duration(1<<63 - 1))
+			}
+		}
 		set.rebuildRule()
 	}
 }
@@ -635,6 +939,183 @@ func (set *Recurrence) SetAllDay(allDay bool) {
 // IsAllDay returns whether the set is configured for all-day events.
 func (set *Recurrence) IsAllDay() bool {
 	return set.allDay
+}
+
+// rrulePropertiesString returns the RRULE value without the "RRULE:" prefix.
+// Example: FREQ=DAILY;COUNT=5
+// Example: FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR
+func (set *Recurrence) rrulePropertiesString() string {
+	result := []string{fmt.Sprintf("FREQ=%v", set.freq)}
+	if set.intervalExplicit && set.interval != 1 {
+		result = append(result, fmt.Sprintf("INTERVAL=%v", set.interval))
+	}
+	if set.wkst != MO.weekday {
+		result = append(result, fmt.Sprintf("WKST=%v", Weekday{weekday: set.wkst}))
+	}
+	if set.count > 0 {
+		result = append(result, fmt.Sprintf("COUNT=%v", set.count))
+	}
+	if !set.until.IsZero() {
+		maxUntil := set.dtstart.Add(time.Duration(1<<63 - 1))
+		if !set.until.Equal(maxUntil) {
+			if set.allDay {
+				until := set.until.In(set.dtstart.Location())
+				result = append(result, fmt.Sprintf("UNTIL=%v", until.Format(DateFormat)))
+			} else {
+				result = append(result, fmt.Sprintf("UNTIL=%v", timeToUTCStr(set.until)))
+			}
+		}
+	}
+	result = appendIntsOption(result, "BYSETPOS", set.bysetpos)
+	if set.bymonthExplicit {
+		result = appendIntsOption(result, "BYMONTH", set.bymonth)
+	}
+	if set.bymonthdayExplicit {
+		byMonthDay := make([]int, 0, len(set.bymonthday)+len(set.bynmonthday))
+		byMonthDay = append(byMonthDay, set.bymonthday...)
+		byMonthDay = append(byMonthDay, set.bynmonthday...)
+		result = appendIntsOption(result, "BYMONTHDAY", byMonthDay)
+	}
+	result = appendIntsOption(result, "BYYEARDAY", set.byyearday)
+	result = appendIntsOption(result, "BYWEEKNO", set.byweekno)
+	if set.byweekdayExplicit {
+		byWeekday := make([]Weekday, 0, len(set.byweekday)+len(set.bynweekday))
+		for _, wday := range set.byweekday {
+			byWeekday = append(byWeekday, Weekday{weekday: wday})
+		}
+		byWeekday = append(byWeekday, set.bynweekday...)
+		valueStr := make([]string, len(byWeekday))
+		for i, wday := range byWeekday {
+			valueStr[i] = wday.String()
+		}
+		result = append(result, fmt.Sprintf("BYDAY=%s", strings.Join(valueStr, ",")))
+	}
+	if !set.allDay {
+		if set.byhourExplicit {
+			result = appendIntsOption(result, "BYHOUR", set.byhour)
+		}
+		if set.byminuteExplicit {
+			result = appendIntsOption(result, "BYMINUTE", set.byminute)
+		}
+		if set.bysecondExplicit {
+			result = appendIntsOption(result, "BYSECOND", set.bysecond)
+		}
+	}
+	result = appendIntsOption(result, "BYEASTER", set.byeaster)
+	return strings.Join(result, ";")
+}
+
+func parseROptionFromString(rfcString string) (*ROption, error) {
+	defaultLoc := time.UTC
+	rfcString = strings.TrimSpace(rfcString)
+	strs := strings.Split(rfcString, "\n")
+	var rruleStr, dtstartStr string
+	switch len(strs) {
+	case 1:
+		rruleStr = strs[0]
+	case 2:
+		dtstartStr = strs[0]
+		rruleStr = strs[1]
+	default:
+		return nil, errors.New("invalid RRULE string")
+	}
+
+	result := ROption{}
+	var dtstartIsDate bool
+	var dtstartHasTZID bool
+	var dtstartIsUTC bool
+	freqSet := false
+
+	if dtstartStr != "" {
+		firstName, err := processRRuleName(dtstartStr)
+		if err != nil {
+			return nil, fmt.Errorf("expect DTSTART but: %s", err)
+		}
+		if firstName != "DTSTART" {
+			return nil, fmt.Errorf("expect DTSTART but: %s", firstName)
+		}
+
+		dtstartValue := dtstartStr[len(firstName)+1:]
+		dtstartIsDate, dtstartHasTZID, dtstartIsUTC = detectDtstartKind(dtstartValue)
+		if dtstartIsDate {
+			result.AllDay = true
+		}
+
+		result.Dtstart, err = StrToDtStart(dtstartValue, defaultLoc)
+		if err != nil {
+			return nil, fmt.Errorf("StrToDtStart failed: %s", err)
+		}
+		if !result.Dtstart.IsZero() {
+			defaultLoc = result.Dtstart.Location()
+		}
+	}
+
+	rruleStr = strings.TrimPrefix(rruleStr, "RRULE:")
+	for _, attr := range strings.Split(rruleStr, ";") {
+		keyValue := strings.Split(attr, "=")
+		if len(keyValue) != 2 {
+			return nil, errors.New("wrong format")
+		}
+		key, value := keyValue[0], keyValue[1]
+		if len(value) == 0 {
+			return nil, errors.New(key + " option has no value")
+		}
+		var err error
+		switch key {
+		case "FREQ":
+			result.Freq, err = StrToFreq(value)
+			freqSet = true
+		case "DTSTART":
+			result.Dtstart, err = strToTimeInLoc(value, defaultLoc)
+		case "INTERVAL":
+			result.Interval, err = strconv.Atoi(value)
+		case "WKST":
+			result.Wkst, err = strToWeekday(value)
+		case "COUNT":
+			result.Count, err = strconv.Atoi(value)
+		case "UNTIL":
+			if dtstartIsDate {
+				if len(value) != len(DateFormat) || strings.Contains(value, "T") {
+					return nil, fmt.Errorf("UNTIL must be DATE when DTSTART is DATE")
+				}
+			} else if dtstartHasTZID || dtstartIsUTC {
+				if !strings.HasSuffix(strings.ToUpper(value), "Z") {
+					return nil, fmt.Errorf("UNTIL must be UTC when DTSTART uses TZID or UTC")
+				}
+			}
+			result.Until, err = strToTimeInLoc(value, defaultLoc)
+		case "BYSETPOS":
+			result.Bysetpos, err = strToInts(value)
+		case "BYMONTH":
+			result.Bymonth, err = strToInts(value)
+		case "BYMONTHDAY":
+			result.Bymonthday, err = strToInts(value)
+		case "BYYEARDAY":
+			result.Byyearday, err = strToInts(value)
+		case "BYWEEKNO":
+			result.Byweekno, err = strToInts(value)
+		case "BYDAY":
+			result.Byweekday, err = strToWeekdays(value)
+		case "BYHOUR":
+			result.Byhour, err = strToInts(value)
+		case "BYMINUTE":
+			result.Byminute, err = strToInts(value)
+		case "BYSECOND":
+			result.Bysecond, err = strToInts(value)
+		case "BYEASTER":
+			result.Byeaster, err = strToInts(value)
+		default:
+			return nil, errors.New("unknown RRULE property: " + key)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if !freqSet {
+		return nil, errors.New("RRULE property FREQ is required")
+	}
+	return &result, nil
 }
 
 type genItem struct {
@@ -771,99 +1252,7 @@ func StrToRRuleSet(s string) (*Recurrence, error) {
 		return nil, errors.New("empty string")
 	}
 	ss := strings.Split(s, "\n")
-	return StrSliceToRRuleSet(ss)
-}
-
-// StrSliceToRRuleSet converts given str slice to RRuleSet
-// In case there is a time met in any rule without specified time zone, when
-// it is parsed in UTC (see StrSliceToRRuleSetInLoc)
-func StrSliceToRRuleSet(ss []string) (*Recurrence, error) {
-	return StrSliceToRRuleSetInLoc(ss, time.UTC)
-}
-
-// StrSliceToRRuleSetInLoc is same as StrSliceToRRuleSet, but by default parses local times
-// in specified default location
-func StrSliceToRRuleSetInLoc(ss []string, defaultLoc *time.Location) (*Recurrence, error) {
-	if len(ss) == 0 {
-		return &Recurrence{}, nil
-	}
-
-	set := Recurrence{}
-	var dtstartLineForRRULE string
-
-	// According to RFC DTSTART is always the first line.
-	firstName, err := processRRuleName(ss[0])
-	if err != nil {
-		return nil, err
-	}
-	if firstName == "DTSTART" {
-		// Detect all-day (VALUE=DATE) before parsing to ensure normalization
-		dtstartField := ss[0][len(firstName)+1:]
-		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(dtstartField)), "VALUE=DATE:") {
-			// Set as all-day before applying DTStart so normalization uses date semantics
-			set.SetAllDay(true)
-		}
-
-		dt, err := StrToDtStart(dtstartField, defaultLoc)
-		if err != nil {
-			return nil, fmt.Errorf("StrToDtStart failed: %v", err)
-		}
-		// default location should be taken from DTSTART property to correctly
-		// parse local times met in RDATE,EXDATE and other rules
-		defaultLoc = dt.Location()
-		set.DTStart(dt)
-		if !set.GetDTStart().IsZero() {
-			if set.allDay {
-				dtstartLineForRRULE = fmt.Sprintf("DTSTART;VALUE=DATE:%s", set.GetDTStart().Format(DateFormat))
-			} else {
-				dtstartLineForRRULE = fmt.Sprintf("DTSTART%s", timeToRFCDatetimeStr(set.GetDTStart()))
-			}
-		}
-		// We've processed the first one
-		ss = ss[1:]
-	}
-
-	for _, line := range ss {
-		name, err := processRRuleName(line)
-		if err != nil {
-			return nil, err
-		}
-		rule := line[len(name)+1:]
-
-		switch name {
-		case "RRULE":
-			rruleInput := line
-			if dtstartLineForRRULE != "" {
-				rruleInput = dtstartLineForRRULE + "\n" + line
-			}
-			rOpt, err := StrToROption(rruleInput)
-			if err != nil {
-				return nil, fmt.Errorf("StrToROption failed: %v", err)
-			}
-			err = set.setRuleOptions(*rOpt)
-			if err != nil {
-				return nil, fmt.Errorf("NewRRule failed: %v", err)
-			}
-		case "RDATE", "EXDATE":
-			if !set.allDay && containsValueDateParam(rule) {
-				set.SetAllDay(true)
-			}
-
-			ts, err := StrToDatesInLoc(rule, defaultLoc)
-			if err != nil {
-				return nil, fmt.Errorf("strToDates failed: %v", err)
-			}
-			for _, t := range ts {
-				if name == "RDATE" {
-					set.RDate(t)
-				} else {
-					set.ExDate(t)
-				}
-			}
-		}
-	}
-
-	return &set, nil
+	return Parse(ss...)
 }
 
 func containsValueDateParam(rule string) bool {
@@ -878,41 +1267,4 @@ func containsValueDateParam(rule string) bool {
 		}
 	}
 	return false
-}
-
-func normalizeRecurrenceStrings(ruleset []string) ([]string, error) {
-	if len(ruleset) == 0 {
-		return nil, fmt.Errorf("empty input strings")
-	}
-
-	normalized, err := NormalizeRecurrenceRuleset(ruleset)
-	if err != nil {
-		return nil, err
-	}
-
-	var result []string
-	var foundRRule bool
-
-	for _, str := range normalized {
-		str = strings.TrimSpace(str)
-		if str == "" {
-			continue
-		}
-
-		if strings.HasPrefix(strings.ToUpper(str), "RRULE:") {
-			if !foundRRule {
-				result = append(result, str)
-				foundRRule = true
-			}
-			continue
-		}
-
-		result = append(result, str)
-	}
-
-	if len(result) == 0 {
-		return nil, fmt.Errorf("no valid recurrence strings found")
-	}
-
-	return result, nil
 }

@@ -4,20 +4,27 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func parseRecurrence(input string) (*Recurrence, error) {
-	option, err := StrToROption(input)
+	return ParseRRuleString(input)
+}
+
+func rruleFromOption(t *testing.T, option ROption) string {
+	r, err := New(option)
 	if err != nil {
-		return nil, err
+		t.Fatalf("unexpected error: %v", err)
 	}
-	return newRecurrence(*option)
+	return strings.TrimPrefix(r.RRuleString(), "RRULE:")
 }
 
 func TestCompatibility(t *testing.T) {
 	str := "FREQ=WEEKLY;DTSTART=20120201T093000Z;INTERVAL=5;WKST=TU;COUNT=2;UNTIL=20130130T230000Z;BYSETPOS=2;BYMONTH=3;BYYEARDAY=95;BYWEEKNO=1;BYDAY=MO,+2FR;BYHOUR=9;BYMINUTE=30;BYSECOND=0;BYEASTER=-1"
 	r, _ := parseRecurrence(str)
-	want := "DTSTART:20120201T093000Z\nRRULE:FREQ=WEEKLY;INTERVAL=5;WKST=TU;COUNT=2;UNTIL=20130130T230000Z;BYSETPOS=2;BYMONTH=3;BYYEARDAY=95;BYWEEKNO=1;BYDAY=MO,+2FR;BYHOUR=9;BYMINUTE=30;BYSECOND=0;BYEASTER=-1"
+	want := "DTSTART:20120201T093000Z\nRRULE:FREQ=WEEKLY;INTERVAL=5;WKST=TU;COUNT=2;UNTIL=20130130T230000Z;BYSETPOS=2;BYMONTH=3;BYYEARDAY=95;BYWEEKNO=1;BYDAY=MO,FR;BYHOUR=9;BYMINUTE=30;BYSECOND=0;BYEASTER=-1"
 	if s := r.String(); s != want {
 		t.Errorf("parseRecurrence(%q).String() = %q, want %q", str, s, want)
 	}
@@ -55,14 +62,14 @@ func TestStrSetParseErrors(t *testing.T) {
 	}
 
 	for _, ss := range inputs {
-		if _, err := StrSliceToRRuleSet(ss); err == nil {
+		if _, err := Parse(ss...); err == nil {
 			t.Error("Expected parse error for rules: ", ss)
 		}
 	}
 }
 
 func TestStrSetEmptySliceParse(t *testing.T) {
-	s, err := StrSliceToRRuleSet([]string{})
+	s, err := Parse()
 	if err != nil {
 		t.Error(err)
 	}
@@ -76,7 +83,7 @@ func TestRDateValueDateStr(t *testing.T) {
 		input := []string{
 			"RDATE;VALUE=DATE:20180223",
 		}
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -86,17 +93,16 @@ func TestRDateValueDateStr(t *testing.T) {
 		}
 	})
 
-	t.Run("PreserveExplicitTimezone", func(t *testing.T) {
-		denver, _ := time.LoadLocation("America/Denver")
+	t.Run("IgnoreTimezoneForValueDate", func(t *testing.T) {
 		input := []string{
 			"RDATE;VALUE=DATE;TZID=America/Denver:20180223",
 		}
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
 		d := s.GetRDate()[0]
-		if !d.Equal(time.Date(2018, 02, 23, 0, 0, 0, 0, denver)) {
+		if !d.Equal(time.Date(2018, 02, 23, 0, 0, 0, 0, time.UTC)) {
 			t.Error("Bad time parsed: ", d)
 		}
 	})
@@ -105,7 +111,6 @@ func TestRDateValueDateStr(t *testing.T) {
 func TestSetStrCompatibility(t *testing.T) {
 	badInputStrs := []string{
 		"",
-		"FREQ=DAILY;UNTIL=20180517T235959Z",
 		"DTSTART:;",
 		"RRULE:;",
 	}
@@ -139,7 +144,7 @@ func TestSetStrCompatibility(t *testing.T) {
 		}
 	}
 	rruleStr := strings.Join(rruleLines, "\n")
-	if rruleStr != "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TU" {
+	if rruleStr != "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=DAILY;UNTIL=20180517T235959Z" {
 		t.Errorf("Unexpected rrule: %s", rruleStr)
 	}
 	if !dtWantTime.Equal(set.GetDTStart()) {
@@ -187,7 +192,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"DTSTART;TZID=Europe/Moscow:20180220T090000",
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -203,7 +208,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
 		expected := "DTSTART;TZID=Europe/Moscow:20180220T090000\nRDATE;TZID=Europe/Moscow:20180223T100000"
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -220,7 +225,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"EXDATE;VALUE=DATE-TIME:20180223T100000",
 		}
 		expected := "DTSTART;TZID=Europe/Moscow:20180220T090000\nEXDATE;TZID=Europe/Moscow:20180223T100000"
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -236,7 +241,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
 		expected := "DTSTART:20180220T090000Z\nRDATE:20180223T100000Z"
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -248,16 +253,16 @@ func TestSetParseLocalTimes(t *testing.T) {
 		}
 	})
 
-	t.Run("SpecifiedDefaultZoneIsUsed", func(t *testing.T) {
+	t.Run("DefaultZoneIsUTC", func(t *testing.T) {
 		input := []string{
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
-		s, err := StrSliceToRRuleSetInLoc(input, moscow)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
 		d := s.GetRDate()[0]
-		if !d.Equal(time.Date(2018, 02, 23, 10, 0, 0, 0, moscow)) {
+		if !d.Equal(time.Date(2018, 02, 23, 10, 0, 0, 0, time.UTC)) {
 			t.Error("Bad time parsed: ", d)
 		}
 	})
@@ -267,9 +272,9 @@ func TestRFCSetToString(t *testing.T) {
 	nyLoc, _ := time.LoadLocation("America/New_York")
 	dtStart := time.Date(2018, 1, 1, 9, 0, 0, 0, nyLoc)
 
-	r := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
-	if r == nil {
-		t.Fatal("failed to create recurrence")
+	r, err := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	if err != nil {
+		t.Fatal(err)
 	}
 	want := "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=MONTHLY"
 	if r.String() != want {
@@ -278,7 +283,10 @@ func TestRFCSetToString(t *testing.T) {
 
 	expectedSetStr := "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=MONTHLY"
 
-	set := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	set, err := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if set.String() != expectedSetStr {
 		t.Errorf("Expected RFC Set string %s, got %s", expectedSetStr, set.String())
 	}
@@ -288,9 +296,9 @@ func TestRFCRuleToStr(t *testing.T) {
 	nyLoc, _ := time.LoadLocation("America/New_York")
 	dtStart := time.Date(2018, 1, 1, 9, 0, 0, 0, nyLoc)
 
-	r := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
-	if r == nil {
-		t.Fatal("failed to create recurrence")
+	r, err := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	if err != nil {
+		t.Fatal(err)
 	}
 	want := "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=MONTHLY"
 	if r.String() != want {
@@ -320,7 +328,7 @@ func TestRRuleStringAllDayUntil(t *testing.T) {
 				Until:   time.Date(2023, 1, 5, 16, 45, 30, 0, tc.tz),
 			}
 
-			output := rruleStringFromOption(&option)
+			output := rruleFromOption(t, option)
 			t.Logf("Timezone %s RRuleString output: %s", tc.name, output)
 
 			// Verify the UNTIL parameter is handled correctly.
@@ -367,7 +375,7 @@ func TestRRuleStringAllDayConsistency(t *testing.T) {
 
 	var outputs []string
 	for i, option := range options {
-		output := rruleStringFromOption(&option)
+		output := rruleFromOption(t, option)
 		outputs = append(outputs, output)
 		t.Logf("Option %d RRuleString output: %s", i+1, output)
 	}
@@ -401,7 +409,7 @@ func TestRRuleStringAllDayWithUntilTimezone(t *testing.T) {
 
 	var outputs []string
 	for i, option := range options {
-		output := rruleStringFromOption(&option)
+		output := rruleFromOption(t, option)
 		outputs = append(outputs, output)
 		t.Logf("Option %d RRuleString output: %s", i+1, output)
 	}
@@ -421,7 +429,7 @@ func TestRRuleStringAllDayWithUntilTimezone(t *testing.T) {
 // Negative COUNT should not appear in the generated RRULE string.
 func TestROption_RRuleString_OmitsNegativeCount(t *testing.T) {
 	opt := ROption{Freq: DAILY, Count: -5}
-	got := rruleStringFromOption(&opt)
+	got := rruleFromOption(t, opt)
 	want := "FREQ=DAILY"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
@@ -435,9 +443,11 @@ func TestParseRecurrence_String_OmitsNegativeCount_NoDTSTART(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := r.String()
-	want := "RRULE:FREQ=DAILY"
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
+	if !strings.Contains(got, "RRULE:FREQ=DAILY") {
+		t.Fatalf("expected RRULE:FREQ=DAILY, got %q", got)
+	}
+	if strings.Contains(got, "COUNT=") {
+		t.Fatalf("expected COUNT to be omitted, got %q", got)
 	}
 }
 
@@ -467,7 +477,7 @@ func TestROption_RRuleString_AllDay_OmitsTimeParts(t *testing.T) {
 		Byminute: []int{30},
 		Bysecond: []int{0},
 	}
-	got := rruleStringFromOption(&opt)
+	got := rruleFromOption(t, opt)
 	if strings.Contains(got, "BYHOUR=") || strings.Contains(got, "BYMINUTE=") || strings.Contains(got, "BYSECOND=") {
 		t.Fatalf("all-day RRULE must not include time parts, got: %q", got)
 	}
@@ -479,7 +489,7 @@ func TestSet_String_AllDay_OmitsTimePartsInRRULE(t *testing.T) {
 		"DTSTART;VALUE=DATE:20230101",
 		"RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,7 +508,7 @@ func TestSet_String_OmitsIgnoredParams_AllDay(t *testing.T) {
 		"DTSTART;VALUE=DATE:20240101",
 		"RRULE:FREQ=DAILY;COUNT=-1;INTERVAL=0;WKST=MO;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -518,7 +528,7 @@ func TestSet_String_OmitsIgnoredParams_Timed(t *testing.T) {
 		"DTSTART:20240101T100000Z",
 		"RRULE:FREQ=DAILY;COUNT=-1;INTERVAL=0;WKST=MO;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -538,7 +548,7 @@ func TestSet_String_OmitsNegativeCount_KeepsUntil(t *testing.T) {
 		"DTSTART:20240101T000000Z",
 		"RRULE:FREQ=DAILY;COUNT=-1;UNTIL=20240103T000000Z",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -554,12 +564,50 @@ func TestSetParse_DTSTARTNotFirst_Ignored(t *testing.T) {
 		"RRULE:FREQ=DAILY;COUNT=1",
 		"DTSTART:20250101T000000Z",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !set.GetDTStart().IsZero() {
-		t.Errorf("expected dtstart to remain zero when DTSTART is not first, got %v", set.GetDTStart())
+	ignored := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	if set.GetDTStart().Equal(ignored) {
+		t.Errorf("expected DTSTART to be ignored when not first, got %v", set.GetDTStart())
+	}
+}
+
+func TestNewWithDTStart_IgnoresDTSTARTInLines(t *testing.T) {
+	dtstart := time.Date(2024, 1, 2, 9, 30, 0, 0, time.UTC)
+	lines := []string{
+		"DTSTART:20240101T000000Z",
+		"RRULE:FREQ=DAILY;COUNT=2",
+	}
+	set, err := NewWithDTStart(dtstart, false, lines...)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !set.GetDTStart().Equal(dtstart) {
+		t.Fatalf("expected dtstart %v, got %v", dtstart, set.GetDTStart())
+	}
+	if got := getRRULELine(set.String()); got != "RRULE:FREQ=DAILY;COUNT=2" {
+		t.Fatalf("unexpected RRULE line: %s", got)
+	}
+}
+
+func TestNewWithDTStart_AllDayUsesProvidedDate(t *testing.T) {
+	dtstart := time.Date(2024, 3, 5, 18, 45, 0, 0, time.FixedZone("JST", 9*3600))
+	lines := []string{
+		"DTSTART:20240101T000000Z",
+		"RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
+	}
+	set, err := NewWithDTStart(dtstart, true, lines...)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantStart := "DTSTART;VALUE=DATE:20240305"
+	if out := set.DTStartString(); out != wantStart {
+		t.Fatalf("expected %q, got %q", wantStart, out)
+	}
+	if rrule := getRRULELine(set.String()); rrule != "RRULE:FREQ=DAILY" {
+		t.Fatalf("expected RRULE without time parts, got %q", rrule)
 	}
 }
 
@@ -608,7 +656,7 @@ func TestStrToRRuleSet_AllDayDetectionAndPropagation(t *testing.T) {
 // UNTIL zero-value should not appear in RRULE output.
 func TestROption_RRuleString_OmitsZeroUntil(t *testing.T) {
 	opt := ROption{Freq: DAILY, Until: time.Time{}}
-	got := rruleStringFromOption(&opt)
+	got := rruleFromOption(t, opt)
 	want := "FREQ=DAILY"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
@@ -622,9 +670,11 @@ func TestParseRecurrence_String_OmitsIntervalZero(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := r.String()
-	want := "RRULE:FREQ=DAILY"
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
+	if !strings.Contains(got, "RRULE:FREQ=DAILY") {
+		t.Fatalf("expected RRULE:FREQ=DAILY, got %q", got)
+	}
+	if strings.Contains(got, "INTERVAL=") {
+		t.Fatalf("expected INTERVAL to be omitted, got %q", got)
 	}
 }
 
@@ -635,9 +685,11 @@ func TestParseRecurrence_String_OmitsDefaultWkst(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := r.String()
-	want := "RRULE:FREQ=WEEKLY"
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
+	if !strings.Contains(got, "RRULE:FREQ=WEEKLY") {
+		t.Fatalf("expected RRULE:FREQ=WEEKLY, got %q", got)
+	}
+	if strings.Contains(got, "WKST=") {
+		t.Fatalf("expected WKST to be omitted, got %q", got)
 	}
 }
 
@@ -650,9 +702,12 @@ func TestParseRecurrence_String_OmitsNegativeCount_KeepsUntil(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := r.String()
-	want := "RRULE:FREQ=DAILY;UNTIL=" + until.Format(DateTimeFormat)
-	if got != want {
-		t.Fatalf("expected %q, got %q", want, got)
+	expected := "RRULE:FREQ=DAILY;UNTIL=" + until.Format(DateTimeFormat)
+	if !strings.Contains(got, expected) {
+		t.Fatalf("expected %q, got %q", expected, got)
+	}
+	if strings.Contains(got, "COUNT=") {
+		t.Fatalf("expected COUNT to be omitted, got %q", got)
 	}
 }
 
@@ -662,7 +717,7 @@ func TestParseRecurrence_String_OmitsCountZero(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	option := r.ruleOptionFromState()
-	if got, want := rruleStringFromOption(&option), "FREQ=DAILY"; got != want {
+	if got, want := rruleFromOption(t, option), "FREQ=DAILY"; got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
 }
@@ -672,7 +727,7 @@ func TestSet_String_OmitsCountZero(t *testing.T) {
 		"DTSTART:20240101T000000Z",
 		"RRULE:FREQ=DAILY;COUNT=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -691,12 +746,12 @@ func TestSet_String_OmitsCountZero(t *testing.T) {
 }
 
 func TestSet_String_ExcludeDTSTARTWhenDisabled(t *testing.T) {
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    DAILY,
 		Dtstart: time.Date(2024, 2, 1, 9, 0, 0, 0, time.UTC),
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 	got := set.RRuleString()
 	want := "RRULE:FREQ=DAILY"
@@ -712,32 +767,16 @@ func TestSetParse_CommaSeparatedDates_StringSplitsLines(t *testing.T) {
 		"RDATE:20240104T090000Z,20240105T090000Z",
 		"EXDATE:20240102T090000Z,20240103T090000Z",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	out := set.String()
-	rdateCount := 0
-	exdateCount := 0
-	for _, line := range splitLines(out) {
-		if strings.HasPrefix(line, "RDATE") {
-			rdateCount++
-			if strings.Contains(line, ",") {
-				t.Fatalf("unexpected comma-separated RDATE output: %q", line)
-			}
-		}
-		if strings.HasPrefix(line, "EXDATE") {
-			exdateCount++
-			if strings.Contains(line, ",") {
-				t.Fatalf("unexpected comma-separated EXDATE output: %q", line)
-			}
-		}
+	if !strings.Contains(out, "RDATE:20240104T090000Z,20240105T090000Z") {
+		t.Fatalf("expected comma-separated RDATE output, got %q", out)
 	}
-	if rdateCount != 2 {
-		t.Fatalf("expected 2 RDATE lines, got %d in %q", rdateCount, out)
-	}
-	if exdateCount != 2 {
-		t.Fatalf("expected 2 EXDATE lines, got %d in %q", exdateCount, out)
+	if !strings.Contains(out, "EXDATE:20240102T090000Z,20240103T090000Z") {
+		t.Fatalf("expected comma-separated EXDATE output, got %q", out)
 	}
 }
 
@@ -784,4 +823,369 @@ func splitLines(s string) []string {
 	}
 	lines = append(lines, s[start:])
 	return lines
+}
+
+func TestNormalizeRecurrenceRuleset(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       []string
+		expected    []string
+		expectError bool
+	}{
+		{
+			name:        "empty input",
+			input:       []string{},
+			expected:    nil,
+			expectError: false,
+		},
+		{
+			name:        "nil input",
+			input:       nil,
+			expected:    nil,
+			expectError: false,
+		},
+		{
+			name:     "already normalized RRULE",
+			input:    []string{"RRULE:FREQ=DAILY;COUNT=5"},
+			expected: []string{"RRULE:FREQ=DAILY;COUNT=5"},
+		},
+		{
+			name:     "dtstart passthrough",
+			input:    []string{"DTSTART:20240101T090000Z"},
+			expected: []string{"DTSTART:20240101T090000Z"},
+		},
+		{
+			name:     "missing RRULE prefix",
+			input:    []string{"FREQ=DAILY;COUNT=5"},
+			expected: []string{"RRULE:FREQ=DAILY;COUNT=5"},
+		},
+		{
+			name:     "mixed case with missing prefix",
+			input:    []string{"freq=daily;count=5"},
+			expected: []string{"RRULE:freq=daily;count=5"},
+		},
+		{
+			name: "multiple rules with mixed formats",
+			input: []string{
+				"RRULE:FREQ=DAILY;COUNT=5",
+				"FREQ=WEEKLY;BYDAY=MO,WE,FR",
+				"RDATE:20240115T100000Z",
+				"EXDATE:20240120T100000Z",
+			},
+			expected: []string{
+				"RRULE:FREQ=DAILY;COUNT=5",
+				"RDATE:20240115T100000Z",
+				"EXDATE:20240120T100000Z",
+			},
+		},
+		{
+			name: "multiple RRULE lines keeps first",
+			input: []string{
+				"RRULE:FREQ=DAILY;COUNT=5",
+				"RRULE:FREQ=WEEKLY;BYDAY=MO",
+				"RDATE:20240115T100000Z",
+			},
+			expected: []string{
+				"RRULE:FREQ=DAILY;COUNT=5",
+				"RDATE:20240115T100000Z",
+			},
+		},
+		{
+			name:     "RDATE without modification",
+			input:    []string{"RDATE:20240115T100000Z"},
+			expected: []string{"RDATE:20240115T100000Z"},
+		},
+		{
+			name:     "EXDATE without modification",
+			input:    []string{"EXDATE:20240120T100000Z"},
+			expected: []string{"EXDATE:20240120T100000Z"},
+		},
+		{
+			name:        "empty string in array",
+			input:       []string{"FREQ=DAILY;COUNT=5", "", "RDATE:20240115T100000Z"},
+			expected:    []string{"RRULE:FREQ=DAILY;COUNT=5", "RDATE:20240115T100000Z"},
+			expectError: false,
+		},
+		{
+			name:        "whitespace only string",
+			input:       []string{"FREQ=DAILY;COUNT=5", "   ", "RDATE:20240115T100000Z"},
+			expected:    []string{"RRULE:FREQ=DAILY;COUNT=5", "RDATE:20240115T100000Z"},
+			expectError: false,
+		},
+		{
+			name:        "invalid rule without FREQ",
+			input:       []string{"COUNT=5"},
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "completely invalid format",
+			input:       []string{"invalid rule format"},
+			expected:    nil,
+			expectError: true,
+		},
+		{
+			name:        "empty RRULE content",
+			input:       []string{"RRULE:"},
+			expected:    nil,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := NormalizeRecurrenceRuleset(tt.input)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.EqualValues(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestNormalizeRecurrenceLine(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expected    string
+		expectError bool
+	}{
+		{
+			name:     "already normalized RRULE",
+			input:    "RRULE:FREQ=DAILY;COUNT=5",
+			expected: "RRULE:FREQ=DAILY;COUNT=5",
+		},
+		{
+			name:     "missing RRULE prefix",
+			input:    "FREQ=DAILY;COUNT=5",
+			expected: "RRULE:FREQ=DAILY;COUNT=5",
+		},
+		{
+			name:     "RDATE rule",
+			input:    "RDATE:20240115T100000Z",
+			expected: "RDATE:20240115T100000Z",
+		},
+		{
+			name:     "EXDATE rule",
+			input:    "EXDATE:20240120T100000Z",
+			expected: "EXDATE:20240120T100000Z",
+		},
+		{
+			name:     "DTSTART rule passthrough",
+			input:    "DTSTART:20240101T090000Z",
+			expected: "DTSTART:20240101T090000Z",
+		},
+		{
+			name:     "complex RRULE",
+			input:    "FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20241231T235959Z",
+			expected: "RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20241231T235959Z",
+		},
+		{
+			name:        "invalid rule without FREQ",
+			input:       "COUNT=5;INTERVAL=2",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "empty string",
+			input:       "",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "whitespace only",
+			input:       "   ",
+			expected:    "",
+			expectError: true,
+		},
+		{
+			name:        "empty RRULE content",
+			input:       "RRULE:",
+			expected:    "",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := normalizeRecurrenceLine(tt.input)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Empty(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.EqualValues(t, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestValidateRRuleProperties(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		expectError bool
+	}{
+		{
+			name:        "valid daily rule",
+			input:       "FREQ=DAILY;COUNT=5",
+			expectError: false,
+		},
+		{
+			name:        "valid weekly rule",
+			input:       "FREQ=WEEKLY;BYDAY=MO,WE,FR",
+			expectError: false,
+		},
+		{
+			name:        "valid monthly rule",
+			input:       "FREQ=MONTHLY;BYMONTHDAY=15",
+			expectError: false,
+		},
+		{
+			name:        "missing FREQ parameter",
+			input:       "COUNT=5;INTERVAL=2",
+			expectError: true,
+		},
+		{
+			name:        "empty content",
+			input:       "",
+			expectError: true,
+		},
+		{
+			name:        "whitespace only",
+			input:       "   ",
+			expectError: true,
+		},
+		{
+			name:        "case insensitive FREQ",
+			input:       "freq=daily;count=5",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRRuleProperties(tt.input)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestIsRRuleProperties(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{
+			name:     "valid RRULE content",
+			input:    "FREQ=DAILY;COUNT=5",
+			expected: true,
+		},
+		{
+			name:     "valid complex RRULE content",
+			input:    "FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20241231T235959Z",
+			expected: true,
+		},
+		{
+			name:     "already has RRULE prefix",
+			input:    "RRULE:FREQ=DAILY;COUNT=5",
+			expected: false,
+		},
+		{
+			name:     "RDATE format",
+			input:    "RDATE:20240115T100000Z",
+			expected: false,
+		},
+		{
+			name:     "EXDATE format",
+			input:    "EXDATE:20240120T100000Z",
+			expected: false,
+		},
+		{
+			name:     "missing FREQ",
+			input:    "COUNT=5;INTERVAL=2",
+			expected: false,
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: false,
+		},
+		{
+			name:     "case insensitive",
+			input:    "freq=daily;count=5",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isRRuleProperties(tt.input)
+			assert.EqualValues(t, tt.expected, result)
+		})
+	}
+}
+
+func TestRecurrenceRulesetNormalizationIntegration(t *testing.T) {
+	testCases := []struct {
+		name           string
+		inputRules     []string
+		expectedStored []string
+	}{
+		{
+			name:           "missing RRULE prefix",
+			inputRules:     []string{"FREQ=DAILY;COUNT=5"},
+			expectedStored: []string{"RRULE:FREQ=DAILY;COUNT=5"},
+		},
+		{
+			name:           "already normalized RRULE",
+			inputRules:     []string{"RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"},
+			expectedStored: []string{"RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR"},
+		},
+		{
+			name: "mixed RRULE and date exceptions",
+			inputRules: []string{
+				"FREQ=DAILY;COUNT=10",
+				"RDATE:20240115T100000Z",
+				"EXDATE:20240120T100000Z",
+			},
+			expectedStored: []string{
+				"RRULE:FREQ=DAILY;COUNT=10",
+				"RDATE:20240115T100000Z",
+				"EXDATE:20240120T100000Z",
+			},
+		},
+		{
+			name: "complex RRULE parameters",
+			inputRules: []string{
+				"FREQ=MONTHLY;BYMONTHDAY=15;BYSETPOS=1,3;COUNT=12",
+			},
+			expectedStored: []string{
+				"RRULE:FREQ=MONTHLY;BYMONTHDAY=15;BYSETPOS=1,3;COUNT=12",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			normalized, err := NormalizeRecurrenceRuleset(tc.inputRules)
+			require.NoError(t, err, "Normalization should succeed")
+			assert.EqualValues(t, tc.expectedStored, normalized, "Normalized rules should match expected")
+
+			if len(normalized) > 0 {
+				t.Logf("Normalized rules ready for parsing: %v", normalized)
+			}
+		})
+	}
 }

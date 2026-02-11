@@ -1035,9 +1035,9 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 				AllDay:  true,
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // All-day event hours start at 0.
-				time.Date(2020, 1, 1, 1, 0, 0, 0, time.UTC),
-				time.Date(2020, 1, 1, 2, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
 			},
 		},
 		{
@@ -1050,8 +1050,8 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 				AllDay:  true,
 			},
 			expected: []time.Time{
-				time.Date(2020, 1, 1, 9, 0, 0, 0, time.UTC),
-				time.Date(2020, 1, 1, 15, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 			},
 		},
 	}
@@ -1482,18 +1482,20 @@ func TestIteratorConcurrency(t *testing.T) {
 		Count:   1000,
 	}
 
-	rrule, err := newRecurrence(opt)
-	if err != nil {
-		t.Fatalf("Failed to create RRule: %v", err)
-	}
-
 	// Call All() concurrently.
 	const numGoroutines = 10
 	results := make([][]time.Time, numGoroutines)
 	done := make(chan int, numGoroutines)
+	errs := make(chan error, numGoroutines)
 
 	for i := 0; i < numGoroutines; i++ {
 		go func(index int) {
+			rrule, err := newRecurrence(opt)
+			if err != nil {
+				errs <- err
+				done <- index
+				return
+			}
 			results[index] = rrule.All()
 			done <- index
 		}(i)
@@ -1502,6 +1504,12 @@ func TestIteratorConcurrency(t *testing.T) {
 	// Wait for all goroutines to finish.
 	for i := 0; i < numGoroutines; i++ {
 		<-done
+	}
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("Failed to create RRule: %v", err)
+		}
 	}
 
 	// Verify all results match.

@@ -94,12 +94,15 @@ func (a *RecurrenceDiffer) parseRulesForAnalysis(ruleset []string) (*Recurrence,
 
 	// Parse with the default dtstart.
 	defaultDTStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	normalized, err := normalizeRecurrenceStrings(ruleset)
+	normalized, err := NormalizeRecurrenceRuleset(ruleset)
 	if err != nil {
 		return nil, err
 	}
+	if len(normalized) == 0 {
+		return nil, nil
+	}
 
-	set, err := StrSliceToRRuleSet(normalized)
+	set, err := Parse(normalized...)
 	if err == nil {
 		if set.GetDTStart().IsZero() {
 			set.DTStart(defaultDTStart)
@@ -112,7 +115,7 @@ func (a *RecurrenceDiffer) parseRulesForAnalysis(ruleset []string) (*Recurrence,
 		return nil, err
 	}
 
-	set, err = StrSliceToRRuleSet(normalized)
+	set, err = Parse(normalized...)
 	if err != nil {
 		return nil, err
 	}
@@ -332,12 +335,15 @@ func (a *RecurrenceDiffer) compareExDates(oldExDates, newExDates []time.Time) ([
 }
 
 func deriveMatchingDTStart(ruleset []string, anchor time.Time, allDay bool) (time.Time, error) {
-	normalized, err := normalizeRecurrenceStrings(ruleset)
+	normalized, err := NormalizeRecurrenceRuleset(ruleset)
 	if err != nil {
 		return time.Time{}, err
 	}
+	if len(normalized) == 0 {
+		return time.Time{}, fmt.Errorf("no recurrence strings provided")
+	}
 
-	set, err := StrSliceToRRuleSet(normalized)
+	set, err := Parse(normalized...)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -378,6 +384,9 @@ func (a *RecurrenceDiffer) hasRDateChange(oldSet, newSet *Recurrence) bool {
 
 func ruleUntilValue(set *Recurrence) *time.Time {
 	if set == nil || !set.hasRule {
+		return nil
+	}
+	if set.until.IsZero() {
 		return nil
 	}
 	maxUntil := set.dtstart.Add(time.Duration(1<<63 - 1))

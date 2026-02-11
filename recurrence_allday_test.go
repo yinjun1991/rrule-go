@@ -8,7 +8,7 @@ import (
 
 // TestAllDayDaily tests daily recurrence for all-day events.
 func TestAllDayDaily(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    DAILY,
 		Count:   3,
 		AllDay:  true,
@@ -27,7 +27,7 @@ func TestAllDayDaily(t *testing.T) {
 
 // TestAllDayWeekly tests weekly recurrence for all-day events.
 func TestAllDayWeekly(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    WEEKLY,
 		Count:   3,
 		AllDay:  true,
@@ -46,7 +46,7 @@ func TestAllDayWeekly(t *testing.T) {
 
 // TestAllDayMonthly tests monthly recurrence for all-day events.
 func TestAllDayMonthly(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    MONTHLY,
 		Count:   3,
 		AllDay:  true,
@@ -65,7 +65,7 @@ func TestAllDayMonthly(t *testing.T) {
 
 // TestAllDayYearly tests yearly recurrence for all-day events.
 func TestAllDayYearly(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    YEARLY,
 		Count:   3,
 		AllDay:  true,
@@ -84,7 +84,7 @@ func TestAllDayYearly(t *testing.T) {
 
 // TestAllDayWithUntil tests UNTIL boundary handling for all-day events.
 func TestAllDayWithUntil(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    DAILY,
 		AllDay:  true,
 		Dtstart: time.Date(2023, 1, 1, 10, 30, 0, 0, time.UTC),
@@ -103,7 +103,7 @@ func TestAllDayWithUntil(t *testing.T) {
 
 // TestAllDayWithUntilMidnight tests the midnight UNTIL boundary for all-day events.
 func TestAllDayWithUntilMidnight(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    DAILY,
 		AllDay:  true,
 		Dtstart: time.Date(2023, 1, 1, 15, 0, 0, 0, time.UTC),
@@ -122,7 +122,7 @@ func TestAllDayWithUntilMidnight(t *testing.T) {
 
 // TestAllDayWithCount tests COUNT handling for all-day events.
 func TestAllDayWithCount(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    WEEKLY,
 		Count:   5,
 		AllDay:  true,
@@ -156,7 +156,7 @@ func TestAllDayDTStartProcessing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			r, _ := newRecurrence(ROption{
+			r, _ := New(ROption{
 				Freq:    DAILY,
 				Count:   2,
 				AllDay:  true,
@@ -176,14 +176,14 @@ func TestAllDayDTStartProcessing(t *testing.T) {
 
 // TestAllDaySetWithRDate tests Set RDate for all-day events.
 func TestAllDaySetWithRDate(t *testing.T) {
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    WEEKLY,
 		Count:   2,
 		AllDay:  true,
 		Dtstart: time.Date(2023, 1, 1, 14, 30, 0, 0, time.UTC),
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Add extra dates.
@@ -204,14 +204,14 @@ func TestAllDaySetWithRDate(t *testing.T) {
 
 // TestAllDaySetWithExDate tests Set ExDate for all-day events.
 func TestAllDaySetWithExDate(t *testing.T) {
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    DAILY,
 		Count:   5,
 		AllDay:  true,
 		Dtstart: time.Date(2023, 1, 1, 11, 20, 0, 0, time.UTC),
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Exclude specific dates (use midnight to match all-day events).
@@ -231,14 +231,14 @@ func TestAllDaySetWithExDate(t *testing.T) {
 
 // TestAllDaySetComplex tests complex Set combinations for all-day events.
 func TestAllDaySetComplex(t *testing.T) {
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    WEEKLY,
 		Count:   3,
 		AllDay:  true,
 		Dtstart: time.Date(2023, 1, 1, 10, 0, 0, 0, time.UTC),
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Add an extra date.
@@ -273,7 +273,7 @@ func TestAllDayTimezoneHandling(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			r, _ := newRecurrence(ROption{
+			r, _ := New(ROption{
 				Freq:    DAILY,
 				Count:   2,
 				AllDay:  true,
@@ -297,7 +297,7 @@ func TestAllDayTimezoneHandling(t *testing.T) {
 
 // TestAllDayLeapYear tests leap year handling for all-day events.
 func TestAllDayLeapYear(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    YEARLY,
 		Count:   4,
 		AllDay:  true,
@@ -317,7 +317,7 @@ func TestAllDayLeapYear(t *testing.T) {
 
 // TestAllDayYearBoundary tests year boundary handling for all-day events.
 func TestAllDayYearBoundary(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    DAILY,
 		Count:   5,
 		AllDay:  true,
@@ -338,7 +338,7 @@ func TestAllDayYearBoundary(t *testing.T) {
 
 // TestAllDayMonthBoundary tests month boundary handling for all-day events.
 func TestAllDayMonthBoundary(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    DAILY,
 		Count:   4,
 		AllDay:  true,
@@ -358,7 +358,7 @@ func TestAllDayMonthBoundary(t *testing.T) {
 
 // TestAllDayIterator tests the iterator for all-day events.
 func TestAllDayIterator(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:    DAILY,
 		Count:   3,
 		AllDay:  true,
@@ -389,7 +389,7 @@ func TestAllDayIterator(t *testing.T) {
 
 // TestAllDayWithByWeekDay tests all-day events with ByWeekday rules.
 func TestAllDayWithByWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:      WEEKLY,
 		Count:     4,
 		AllDay:    true,
@@ -410,7 +410,7 @@ func TestAllDayWithByWeekDay(t *testing.T) {
 
 // TestAllDayWithByMonthDay tests all-day events with ByMonthday rules.
 func TestAllDayWithByMonthDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{
+	r, _ := New(ROption{
 		Freq:       MONTHLY,
 		Count:      3,
 		AllDay:     true,
@@ -431,7 +431,7 @@ func TestAllDayWithByMonthDay(t *testing.T) {
 // TestAllDayConsistencyWithNonAllDay tests consistency between all-day and timed events.
 func TestAllDayConsistencyWithNonAllDay(t *testing.T) {
 	// All-day event.
-	allDayRule, _ := newRecurrence(ROption{
+	allDayRule, _ := New(ROption{
 		Freq:    DAILY,
 		Count:   3,
 		AllDay:  true,
@@ -439,7 +439,7 @@ func TestAllDayConsistencyWithNonAllDay(t *testing.T) {
 	})
 
 	// Timed event at midnight on the same date.
-	nonAllDayRule, _ := newRecurrence(ROption{
+	nonAllDayRule, _ := New(ROption{
 		Freq:    DAILY,
 		Count:   3,
 		AllDay:  false,
@@ -458,7 +458,7 @@ func TestAllDayConsistencyWithNonAllDay(t *testing.T) {
 
 func TestAllDay_BeforeAfterBetween(t *testing.T) {
 	dt := time.Date(2023, 1, 1, 12, 0, 0, 0, time.UTC)
-	r, err := newRecurrence(ROption{Freq: DAILY, Count: 3, AllDay: true, Dtstart: dt})
+	r, err := New(ROption{Freq: DAILY, Count: 3, AllDay: true, Dtstart: dt})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,14 +501,14 @@ func TestAllDay_BeforeAfterBetween(t *testing.T) {
 func TestRecurrenceIterator_AllDay_BasicFunctionality(t *testing.T) {
 	// Test basic all-day event iteration with RRule
 	dtstart := time.Date(2025, 1, 1, 10, 30, 0, 0, time.UTC)
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    DAILY,
 		Count:   1,
 		AllDay:  true,
 		Dtstart: dtstart,
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	iter := set.Iterator()
@@ -648,14 +648,14 @@ func TestRecurrenceIterator_AllDay_TimeZoneIndependence(t *testing.T) {
 func TestRecurrenceIterator_AllDay_WithRRule(t *testing.T) {
 	// Test all-day events with rrule integration
 	dtstart := time.Date(2025, 1, 1, 10, 0, 0, 0, time.UTC)
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    DAILY,
 		Count:   3,
 		AllDay:  true,
 		Dtstart: dtstart,
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	iter := set.Iterator()
@@ -755,7 +755,7 @@ func TestRecurrenceIterator_AllDay_EdgeCases(t *testing.T) {
 	// Test edge cases for all-day events
 	t.Run("EmptyRDates", func(t *testing.T) {
 		dtstart := time.Date(2025, 1, 1, 15, 30, 0, 0, time.UTC)
-		set, err := newRecurrence(ROption{
+		set, err := New(ROption{
 			Freq:    DAILY,
 			Count:   1,
 			AllDay:  true,
@@ -781,7 +781,7 @@ func TestRecurrenceIterator_AllDay_EdgeCases(t *testing.T) {
 
 	t.Run("EmptyExDates", func(t *testing.T) {
 		dtstart := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-		set, err := newRecurrence(ROption{
+		set, err := New(ROption{
 			Freq:    DAILY,
 			Count:   1,
 			AllDay:  true,
@@ -808,7 +808,7 @@ func TestRecurrenceIterator_AllDay_EdgeCases(t *testing.T) {
 	t.Run("LeapYear", func(t *testing.T) {
 		// Test leap year handling
 		dtstart := time.Date(2024, 2, 29, 12, 0, 0, 0, time.UTC) // Leap year
-		set, err := newRecurrence(ROption{
+		set, err := New(ROption{
 			Freq:    DAILY,
 			Count:   1,
 			AllDay:  true,
@@ -1214,9 +1214,7 @@ func TestAllDaySetStringWithRDate(t *testing.T) {
 			},
 			expected: []string{
 				"DTSTART;VALUE=DATE:20230610",
-				"RDATE;VALUE=DATE:20230615",
-				"RDATE;VALUE=DATE:20230620",
-				"RDATE;VALUE=DATE:20230625",
+				"RDATE;VALUE=DATE:20230615,20230620,20230625",
 			},
 		},
 	}
@@ -1287,9 +1285,7 @@ func TestAllDaySetStringWithExDate(t *testing.T) {
 			},
 			expected: []string{
 				"DTSTART;VALUE=DATE:20230801",
-				"EXDATE;VALUE=DATE:20230805",
-				"EXDATE;VALUE=DATE:20230810",
-				"EXDATE;VALUE=DATE:20230815",
+				"EXDATE;VALUE=DATE:20230805,20230810,20230815",
 			},
 		},
 	}
@@ -1335,7 +1331,7 @@ func TestAllDaySetStringWithExDate(t *testing.T) {
 func TestAllDaySetStringComplex(t *testing.T) {
 	dtstart := time.Date(2023, 9, 1, 14, 30, 0, 0, time.FixedZone("EST", -5*3600))
 	until := time.Date(2023, 9, 30, 23, 59, 59, 0, time.UTC)
-	set, err := newRecurrence(ROption{
+	set, err := New(ROption{
 		Freq:    WEEKLY,
 		AllDay:  true,
 		Dtstart: dtstart,
@@ -1359,10 +1355,8 @@ func TestAllDaySetStringComplex(t *testing.T) {
 	expectedStrings := []string{
 		"DTSTART;VALUE=DATE:20230901",
 		"RRULE:FREQ=WEEKLY;UNTIL=20230930",
-		"RDATE;VALUE=DATE:20230915",
-		"RDATE;VALUE=DATE:20230925",
-		"EXDATE;VALUE=DATE:20230908",
-		"EXDATE;VALUE=DATE:20230922",
+		"RDATE;VALUE=DATE:20230915,20230925",
+		"EXDATE;VALUE=DATE:20230908,20230922",
 	}
 
 	for _, expected := range expectedStrings {
@@ -1398,14 +1392,14 @@ func TestAllDaySetStringComplex(t *testing.T) {
 	}
 }
 
-func TestStrSliceToRRuleSetDetectsAllDayFromRDate(t *testing.T) {
+func TestParseDetectsAllDayFromRDate(t *testing.T) {
 	lines := []string{
 		"RDATE;VALUE=DATE:20240301,20240303",
 	}
 
-	set, err := StrSliceToRRuleSetInLoc(lines, time.UTC)
+	set, err := Parse(lines...)
 	if err != nil {
-		t.Fatalf("StrSliceToRRuleSetInLoc failed: %v", err)
+		t.Fatalf("Parse failed: %v", err)
 	}
 	if !set.IsAllDay() {
 		t.Fatal("Set should be marked all-day when RDATE uses VALUE=DATE")
@@ -1423,21 +1417,20 @@ func TestStrSliceToRRuleSetDetectsAllDayFromRDate(t *testing.T) {
 		t.Fatalf("RDATEs were not normalized to floating midnight: %v", rdates)
 	}
 
-	recurrence := set.RRuleString()
-	if !strings.Contains(recurrence, "RDATE;VALUE=DATE:20240301") ||
-		!strings.Contains(recurrence, "RDATE;VALUE=DATE:20240303") {
-		t.Fatalf("Expected VALUE=DATE serialization, got %q", recurrence)
+	output := set.String()
+	if !strings.Contains(output, "RDATE;VALUE=DATE:20240301,20240303") {
+		t.Fatalf("Expected VALUE=DATE serialization, got %q", output)
 	}
 }
 
-func TestStrSliceToRRuleSetDetectsAllDayFromExDate(t *testing.T) {
+func TestParseDetectsAllDayFromExDate(t *testing.T) {
 	lines := []string{
 		"EXDATE;VALUE=DATE:20250110,20250112",
 	}
 
-	set, err := StrSliceToRRuleSetInLoc(lines, time.UTC)
+	set, err := Parse(lines...)
 	if err != nil {
-		t.Fatalf("StrSliceToRRuleSetInLoc failed: %v", err)
+		t.Fatalf("Parse failed: %v", err)
 	}
 	if !set.IsAllDay() {
 		t.Fatal("Set should be marked all-day when EXDATE uses VALUE=DATE")
@@ -1455,9 +1448,8 @@ func TestStrSliceToRRuleSetDetectsAllDayFromExDate(t *testing.T) {
 		t.Fatalf("EXDATEs were not normalized to floating midnight: %v", exdates)
 	}
 
-	recurrence := set.RRuleString()
-	if !strings.Contains(recurrence, "EXDATE;VALUE=DATE:20250110") ||
-		!strings.Contains(recurrence, "EXDATE;VALUE=DATE:20250112") {
-		t.Fatalf("Expected VALUE=DATE serialization, got %q", recurrence)
+	output := set.String()
+	if !strings.Contains(output, "EXDATE;VALUE=DATE:20250110,20250112") {
+		t.Fatalf("Expected VALUE=DATE serialization, got %q", output)
 	}
 }

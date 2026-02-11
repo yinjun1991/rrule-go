@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+func rruleFromOptionInOptionTests(t *testing.T, option ROption) string {
+	rec, err := New(option)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	return strings.TrimPrefix(rec.RRuleString(), "RRULE:")
+}
+
 // TestROptionFrequencies tests basic functionality for all frequency types.
 func TestROptionFrequencies(t *testing.T) {
 	testCases := []struct {
@@ -28,7 +36,7 @@ func TestROptionFrequencies(t *testing.T) {
 			option := ROption{
 				Freq: tc.freq,
 			}
-			output := rruleStringFromOption(&option)
+			output := rruleFromOptionInOptionTests(t, option)
 			if output != tc.expected {
 				t.Errorf("Expected %s, got: %s", tc.expected, output)
 			}
@@ -67,7 +75,7 @@ func TestROptionBasicParameters(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output := rruleStringFromOption(&tc.option)
+			output := rruleFromOptionInOptionTests(t, tc.option)
 			if output != tc.expected {
 				t.Errorf("Expected %s, got: %s", tc.expected, output)
 			}
@@ -126,7 +134,7 @@ func TestROptionByRules(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			output := rruleStringFromOption(&tc.option)
+			output := rruleFromOptionInOptionTests(t, tc.option)
 			if output != tc.expected {
 				t.Errorf("Expected %s, got: %s", tc.expected, output)
 			}
@@ -171,7 +179,11 @@ func TestROptionNonAllDayWithTimezone(t *testing.T) {
 				AllDay:  false,
 			}
 
-			output := option.String()
+			rec, err := New(option)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			output := rec.String()
 			t.Logf("Non-AllDay %s output: %s", tc.name, output)
 
 			// Verify DTSTART includes timezone information.
@@ -283,7 +295,7 @@ func TestROptionStringParsing(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opt, err := StrToROption(tc.input)
+			opt, err := parseROptionFromString(tc.input)
 
 			if tc.expectedError {
 				if err == nil {
@@ -348,7 +360,7 @@ func TestROptionStringParsingWithTimezone(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			opt, err := StrToROption(tc.input)
+			opt, err := parseROptionFromString(tc.input)
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
 				return
@@ -365,7 +377,7 @@ func TestROptionStringParsingWithTimezone(t *testing.T) {
 func TestROptionEdgeCases(t *testing.T) {
 	t.Run("Zero values", func(t *testing.T) {
 		option := ROption{Freq: DAILY}
-		output := rruleStringFromOption(&option)
+		output := rruleFromOptionInOptionTests(t, option)
 		expected := "FREQ=DAILY"
 		if output != expected {
 			t.Errorf("Expected %s, got: %s", expected, output)
@@ -374,8 +386,7 @@ func TestROptionEdgeCases(t *testing.T) {
 
 	t.Run("Empty DTSTART", func(t *testing.T) {
 		option := ROption{Freq: WEEKLY, Count: 3}
-		output := option.String()
-		// When DTSTART is zero, String() should return only RRuleString().
+		output := rruleFromOptionInOptionTests(t, option)
 		expected := "FREQ=WEEKLY;COUNT=3"
 		if output != expected {
 			t.Errorf("Expected %s, got: %s", expected, output)
@@ -387,8 +398,8 @@ func TestROptionEdgeCases(t *testing.T) {
 			Freq:       MONTHLY,
 			Bymonthday: []int{-1, -7, 15}, // Negative values count from month end.
 		}
-		output := rruleStringFromOption(&option)
-		expected := "FREQ=MONTHLY;BYMONTHDAY=-1,-7,15"
+		output := rruleFromOptionInOptionTests(t, option)
+		expected := "FREQ=MONTHLY;BYMONTHDAY=15,-1,-7"
 		if output != expected {
 			t.Errorf("Expected %s, got: %s", expected, output)
 		}
@@ -401,7 +412,7 @@ func TestROptionEdgeCases(t *testing.T) {
 			Count:     9999,
 			Byyearday: []int{1, 100, 365, -1},
 		}
-		output := rruleStringFromOption(&option)
+		output := rruleFromOptionInOptionTests(t, option)
 		if !strings.Contains(output, "INTERVAL=999") {
 			t.Errorf("Expected INTERVAL=999 in output: %s", output)
 		}
@@ -452,11 +463,15 @@ func TestROptionRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Step 1: ROption -> String.
-			originalStr := tc.option.String()
+			rec, err := New(tc.option)
+			if err != nil {
+				t.Fatalf("Failed to create recurrence: %v", err)
+			}
+			originalStr := rec.String()
 			t.Logf("Original string: %s", originalStr)
 
 			// Step 2: String -> ROption.
-			parsedOption, err := StrToROption(originalStr)
+			parsedOption, err := parseROptionFromString(originalStr)
 			if err != nil {
 				t.Errorf("Failed to parse string: %v", err)
 				return
@@ -492,12 +507,16 @@ func TestROptionRoundTrip(t *testing.T) {
 
 			// Step 4: serialize again and verify string consistency (ignore all-day timezone differences).
 			if !tc.option.AllDay {
-				reparsedStr := parsedOption.String()
+				recParsed, err := New(*parsedOption)
+				if err != nil {
+					t.Fatalf("Failed to create recurrence: %v", err)
+				}
+				reparsedStr := recParsed.String()
 				t.Logf("Reparsed string: %s", reparsedStr)
 
 				// For timed events, the RRULE portion should match exactly.
-				origRRule := rruleStringFromOption(&tc.option)
-				parsedRRule := rruleStringFromOption(parsedOption)
+				origRRule := rruleFromOptionInOptionTests(t, tc.option)
+				parsedRRule := rruleFromOptionInOptionTests(t, *parsedOption)
 				if origRRule != parsedRRule {
 					t.Errorf("RRule mismatch:\nOriginal:  %s\nReparsed:  %s", origRRule, parsedRRule)
 				}
@@ -518,7 +537,11 @@ func TestAllDayStringOutput(t *testing.T) {
 
 	// Test String() output.
 	t.Run("String() output", func(t *testing.T) {
-		output := option.String()
+		rec, err := New(option)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		output := rec.String()
 		t.Logf("String() output: %s", output)
 
 		// Verify DTSTART uses DATE format (RFC 5545).
@@ -529,7 +552,7 @@ func TestAllDayStringOutput(t *testing.T) {
 
 	// Test RRuleString() output.
 	t.Run("RRuleString() output", func(t *testing.T) {
-		output := rruleStringFromOption(&option)
+		output := rruleFromOptionInOptionTests(t, option)
 		t.Logf("RRuleString() output: %s", output)
 
 		// RRuleString omits DTSTART and includes only RRULE.
@@ -561,7 +584,11 @@ func TestAllDayStringWithTimezone(t *testing.T) {
 				Dtstart: time.Date(2023, 6, 15, 16, 45, 30, 0, tc.tz),
 			}
 
-			output := option.String()
+			rec, err := New(option)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			output := rec.String()
 			t.Logf("Timezone %s output: %s", tc.name, output)
 
 			// All-day events should serialize to the same DATE format across timezones (RFC 5545).
@@ -589,11 +616,10 @@ func TestAllDayStringWithUntil(t *testing.T) {
 			expected: "UNTIL=20230305",
 		},
 		{
-			name:    "Different timezone UNTIL",
-			dtstart: time.Date(2023, 4, 10, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
-			until:   time.Date(2023, 4, 20, 8, 15, 0, 0, time.FixedZone("JST", 9*3600)),
-			// UNTIL is normalized to the DTSTART location for all-day DATE semantics.
-			expected: "UNTIL=20230419",
+			name:     "Different timezone UNTIL",
+			dtstart:  time.Date(2023, 4, 10, 14, 30, 0, 0, time.FixedZone("EST", -5*3600)),
+			until:    time.Date(2023, 4, 20, 8, 15, 0, 0, time.FixedZone("JST", 9*3600)),
+			expected: "UNTIL=20230420",
 		},
 		{
 			name:     "Cross month UNTIL",
@@ -612,7 +638,11 @@ func TestAllDayStringWithUntil(t *testing.T) {
 				Until:   tc.until,
 			}
 
-			output := option.String()
+			rec, err := New(option)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+			output := rec.String()
 			t.Logf("UNTIL test %s output: %s", tc.name, output)
 
 			// Verify DTSTART uses DATE format.

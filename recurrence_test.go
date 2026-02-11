@@ -9,12 +9,12 @@ import (
 	"time"
 )
 
+func newRecurrence(option ROption) (*Recurrence, error) {
+	return New(option)
+}
+
 func StrToRRule(input string) (*Recurrence, error) {
-	option, err := StrToROption(input)
-	if err != nil {
-		return nil, err
-	}
-	return newRecurrence(*option)
+	return ParseRRuleString(input)
 }
 
 func timesEqual(value, want []time.Time) bool {
@@ -4614,11 +4614,8 @@ func TestSetDTStart(t *testing.T) {
 
 	want := `DTSTART;TZID=America/New_York:19970903T090000
 RRULE:FREQ=YEARLY;COUNT=1;BYDAY=TU
-RDATE:19970904T090000Z
-RDATE:19970909T090000Z
-EXDATE:19970904T090000Z
-EXDATE:19970911T090000Z
-EXDATE:19970918T090000Z`
+RDATE:19970904T090000Z,19970909T090000Z
+EXDATE:19970904T090000Z,19970911T090000Z,19970918T090000Z`
 	value := r.String()
 	if want != value {
 		t.Errorf("get \n%v\n want \n%v\n", value, want)
@@ -4838,7 +4835,7 @@ func TestSetTrickyTimeZones(t *testing.T) {
 
 func TestSetDtStart(t *testing.T) {
 	ogr := []string{"DTSTART;TZID=America/Los_Angeles:20181115T000000", "RRULE:FREQ=DAILY;INTERVAL=1;WKST=SU;UNTIL=20181118T075959Z"}
-	set, _ := StrSliceToRRuleSet(ogr)
+	set, _ := Parse(ogr...)
 
 	ogoc := set.All()
 	set.DTStart(set.GetDTStart().AddDate(0, 0, 1))
