@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+func newRecurrence(option ROption) (*Recurrence, error) {
+	return New(option)
+}
+
 func StrToRRule(input string) (*Recurrence, error) {
 	option, err := StrToROption(input)
 	if err != nil {
@@ -4838,7 +4842,7 @@ func TestSetTrickyTimeZones(t *testing.T) {
 
 func TestSetDtStart(t *testing.T) {
 	ogr := []string{"DTSTART;TZID=America/Los_Angeles:20181115T000000", "RRULE:FREQ=DAILY;INTERVAL=1;WKST=SU;UNTIL=20181118T075959Z"}
-	set, _ := StrSliceToRRuleSet(ogr)
+	set, _ := Parse(ogr...)
 
 	ogoc := set.All()
 	set.DTStart(set.GetDTStart().AddDate(0, 0, 1))

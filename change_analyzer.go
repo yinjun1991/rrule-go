@@ -99,7 +99,7 @@ func (a *RecurrenceDiffer) parseRulesForAnalysis(ruleset []string) (*Recurrence,
 		return nil, err
 	}
 
-	set, err := StrSliceToRRuleSet(normalized)
+	set, err := Parse(normalized...)
 	if err == nil {
 		if set.GetDTStart().IsZero() {
 			set.DTStart(defaultDTStart)
@@ -112,7 +112,7 @@ func (a *RecurrenceDiffer) parseRulesForAnalysis(ruleset []string) (*Recurrence,
 		return nil, err
 	}
 
-	set, err = StrSliceToRRuleSet(normalized)
+	set, err = Parse(normalized...)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +337,7 @@ func deriveMatchingDTStart(ruleset []string, anchor time.Time, allDay bool) (tim
 		return time.Time{}, err
 	}
 
-	set, err := StrSliceToRRuleSet(normalized)
+	set, err := Parse(normalized...)
 	if err != nil {
 		return time.Time{}, err
 	}

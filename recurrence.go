@@ -34,31 +34,26 @@ type Recurrence struct {
 	rdate                   []time.Time
 	exdate                  []time.Time
 	allDay                  bool
+	intervalExplicit        bool
+	bymonthExplicit         bool
+	bymonthdayExplicit      bool
+	byweekdayExplicit       bool
+	byhourExplicit          bool
+	byminuteExplicit        bool
+	bysecondExplicit        bool
 	hasRule                 bool
 }
 
-func New(option ROption) *Recurrence {
-	rec, err := newRecurrence(option)
-	if err != nil {
-		return nil
-	}
-	return rec
-}
-
-func Parse(lines ...string) *Recurrence {
-	set, err := StrSliceToRRuleSet(lines)
-	if err != nil {
-		return nil
-	}
-	return set
-}
-
-func newRecurrence(option ROption) (*Recurrence, error) {
+func New(option ROption) (*Recurrence, error) {
 	rec := &Recurrence{}
 	if err := rec.setRuleOptions(option); err != nil {
 		return nil, err
 	}
 	return rec, nil
+}
+
+func Parse(lines ...string) (*Recurrence, error) {
+	return StrSliceToRRuleSetInLoc(lines, time.UTC)
 }
 
 func (r *Recurrence) normalizeAllDayTimes() {
@@ -104,6 +99,13 @@ func (r *Recurrence) applyRule(arg ROption) error {
 		return err
 	}
 	r.allDay = arg.AllDay
+	r.intervalExplicit = arg.Interval > 0
+	r.bymonthExplicit = len(arg.Bymonth) != 0
+	r.bymonthdayExplicit = len(arg.Bymonthday) != 0
+	r.byweekdayExplicit = len(arg.Byweekday) != 0
+	r.byhourExplicit = len(arg.Byhour) != 0
+	r.byminuteExplicit = len(arg.Byminute) != 0
+	r.bysecondExplicit = len(arg.Bysecond) != 0
 
 	r.freq = arg.Freq
 
@@ -250,6 +252,10 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 		Byeaster:  cloneIntSlice(r.byeaster),
 	}
 
+	if !r.intervalExplicit && r.interval == 1 {
+		option.Interval = 0
+	}
+
 	if !r.until.IsZero() {
 		maxUntil := r.dtstart.Add(time.Duration(1<<63 - 1))
 		if !r.until.Equal(maxUntil) {
@@ -257,17 +263,39 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 		}
 	}
 
-	byMonthDay := make([]int, 0, len(r.bymonthday)+len(r.bynmonthday))
-	byMonthDay = append(byMonthDay, r.bymonthday...)
-	byMonthDay = append(byMonthDay, r.bynmonthday...)
-	option.Bymonthday = byMonthDay
-
-	byWeekday := make([]Weekday, 0, len(r.byweekday)+len(r.bynweekday))
-	for _, wday := range r.byweekday {
-		byWeekday = append(byWeekday, Weekday{weekday: wday})
+	if !r.bymonthExplicit {
+		option.Bymonth = nil
 	}
-	byWeekday = append(byWeekday, r.bynweekday...)
-	option.Byweekday = byWeekday
+
+	if r.bymonthdayExplicit {
+		byMonthDay := make([]int, 0, len(r.bymonthday)+len(r.bynmonthday))
+		byMonthDay = append(byMonthDay, r.bymonthday...)
+		byMonthDay = append(byMonthDay, r.bynmonthday...)
+		option.Bymonthday = byMonthDay
+	} else {
+		option.Bymonthday = nil
+	}
+
+	if r.byweekdayExplicit {
+		byWeekday := make([]Weekday, 0, len(r.byweekday)+len(r.bynweekday))
+		for _, wday := range r.byweekday {
+			byWeekday = append(byWeekday, Weekday{weekday: wday})
+		}
+		byWeekday = append(byWeekday, r.bynweekday...)
+		option.Byweekday = byWeekday
+	} else {
+		option.Byweekday = nil
+	}
+
+	if !r.byhourExplicit {
+		option.Byhour = nil
+	}
+	if !r.byminuteExplicit {
+		option.Byminute = nil
+	}
+	if !r.bysecondExplicit {
+		option.Bysecond = nil
+	}
 
 	return option
 }
@@ -329,12 +357,12 @@ func (set *Recurrence) Strings() []string {
 		res = append(res, str)
 	}
 
-	str = set.EXDateString()
+	str = set.RDateString()
 	if str != "" {
 		res = append(res, str)
 	}
 
-	str = set.RDateString()
+	str = set.EXDateString()
 	if str != "" {
 		res = append(res, str)
 	}
@@ -396,22 +424,6 @@ func (set *Recurrence) EXDateString() string {
 		return fmt.Sprintf("EXDATE;VALUE=DATE:%s", strings.Join(values, ","))
 	}
 
-	if !set.dtstart.IsZero() {
-		refLoc := set.dtstart.Location()
-		if refLoc == time.UTC {
-			values := make([]string, 0, len(set.exdate))
-			for _, item := range set.exdate {
-				values = append(values, item.In(time.UTC).Format(DateTimeFormat))
-			}
-			return fmt.Sprintf("EXDATE:%s", strings.Join(values, ","))
-		}
-		values := make([]string, 0, len(set.exdate))
-		for _, item := range set.exdate {
-			values = append(values, item.In(refLoc).Format(LocalDateTimeFormat))
-		}
-		return fmt.Sprintf("EXDATE;TZID=%s:%s", refLoc.String(), strings.Join(values, ","))
-	}
-
 	valuesByTZID := make(map[string][]string)
 	var tzidOrder []string
 	for _, item := range set.exdate {
@@ -455,22 +467,6 @@ func (set *Recurrence) RDateString() string {
 			values = append(values, item.Format(DateFormat))
 		}
 		return fmt.Sprintf("RDATE;VALUE=DATE:%s", strings.Join(values, ","))
-	}
-
-	if !set.dtstart.IsZero() {
-		refLoc := set.dtstart.Location()
-		if refLoc == time.UTC {
-			values := make([]string, 0, len(set.rdate))
-			for _, item := range set.rdate {
-				values = append(values, item.In(time.UTC).Format(DateTimeFormat))
-			}
-			return fmt.Sprintf("RDATE:%s", strings.Join(values, ","))
-		}
-		values := make([]string, 0, len(set.rdate))
-		for _, item := range set.rdate {
-			values = append(values, item.In(refLoc).Format(LocalDateTimeFormat))
-		}
-		return fmt.Sprintf("RDATE;TZID=%s:%s", refLoc.String(), strings.Join(values, ","))
 	}
 
 	valuesByTZID := make(map[string][]string)
@@ -771,14 +767,7 @@ func StrToRRuleSet(s string) (*Recurrence, error) {
 		return nil, errors.New("empty string")
 	}
 	ss := strings.Split(s, "\n")
-	return StrSliceToRRuleSet(ss)
-}
-
-// StrSliceToRRuleSet converts given str slice to RRuleSet
-// In case there is a time met in any rule without specified time zone, when
-// it is parsed in UTC (see StrSliceToRRuleSetInLoc)
-func StrSliceToRRuleSet(ss []string) (*Recurrence, error) {
-	return StrSliceToRRuleSetInLoc(ss, time.UTC)
+	return Parse(ss...)
 }
 
 // StrSliceToRRuleSetInLoc is same as StrSliceToRRuleSet, but by default parses local times

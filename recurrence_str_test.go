@@ -11,7 +11,7 @@ func parseRecurrence(input string) (*Recurrence, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newRecurrence(*option)
+	return New(*option)
 }
 
 func TestCompatibility(t *testing.T) {
@@ -55,14 +55,14 @@ func TestStrSetParseErrors(t *testing.T) {
 	}
 
 	for _, ss := range inputs {
-		if _, err := StrSliceToRRuleSet(ss); err == nil {
+		if _, err := Parse(ss...); err == nil {
 			t.Error("Expected parse error for rules: ", ss)
 		}
 	}
 }
 
 func TestStrSetEmptySliceParse(t *testing.T) {
-	s, err := StrSliceToRRuleSet([]string{})
+	s, err := Parse()
 	if err != nil {
 		t.Error(err)
 	}
@@ -76,7 +76,7 @@ func TestRDateValueDateStr(t *testing.T) {
 		input := []string{
 			"RDATE;VALUE=DATE:20180223",
 		}
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -91,7 +91,7 @@ func TestRDateValueDateStr(t *testing.T) {
 		input := []string{
 			"RDATE;VALUE=DATE;TZID=America/Denver:20180223",
 		}
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -187,7 +187,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"DTSTART;TZID=Europe/Moscow:20180220T090000",
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -203,7 +203,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
 		expected := "DTSTART;TZID=Europe/Moscow:20180220T090000\nRDATE;TZID=Europe/Moscow:20180223T100000"
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -220,7 +220,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"EXDATE;VALUE=DATE-TIME:20180223T100000",
 		}
 		expected := "DTSTART;TZID=Europe/Moscow:20180220T090000\nEXDATE;TZID=Europe/Moscow:20180223T100000"
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -236,7 +236,7 @@ func TestSetParseLocalTimes(t *testing.T) {
 			"RDATE;VALUE=DATE-TIME:20180223T100000",
 		}
 		expected := "DTSTART:20180220T090000Z\nRDATE:20180223T100000Z"
-		s, err := StrSliceToRRuleSet(input)
+		s, err := Parse(input...)
 		if err != nil {
 			t.Error(err)
 		}
@@ -267,9 +267,9 @@ func TestRFCSetToString(t *testing.T) {
 	nyLoc, _ := time.LoadLocation("America/New_York")
 	dtStart := time.Date(2018, 1, 1, 9, 0, 0, 0, nyLoc)
 
-	r := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
-	if r == nil {
-		t.Fatal("failed to create recurrence")
+	r, err := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	if err != nil {
+		t.Fatal(err)
 	}
 	want := "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=MONTHLY"
 	if r.String() != want {
@@ -278,7 +278,10 @@ func TestRFCSetToString(t *testing.T) {
 
 	expectedSetStr := "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=MONTHLY"
 
-	set := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	set, err := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if set.String() != expectedSetStr {
 		t.Errorf("Expected RFC Set string %s, got %s", expectedSetStr, set.String())
 	}
@@ -288,9 +291,9 @@ func TestRFCRuleToStr(t *testing.T) {
 	nyLoc, _ := time.LoadLocation("America/New_York")
 	dtStart := time.Date(2018, 1, 1, 9, 0, 0, 0, nyLoc)
 
-	r := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
-	if r == nil {
-		t.Fatal("failed to create recurrence")
+	r, err := New(ROption{Freq: MONTHLY, Dtstart: dtStart})
+	if err != nil {
+		t.Fatal(err)
 	}
 	want := "DTSTART;TZID=America/New_York:20180101T090000\nRRULE:FREQ=MONTHLY"
 	if r.String() != want {
@@ -479,7 +482,7 @@ func TestSet_String_AllDay_OmitsTimePartsInRRULE(t *testing.T) {
 		"DTSTART;VALUE=DATE:20230101",
 		"RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -498,7 +501,7 @@ func TestSet_String_OmitsIgnoredParams_AllDay(t *testing.T) {
 		"DTSTART;VALUE=DATE:20240101",
 		"RRULE:FREQ=DAILY;COUNT=-1;INTERVAL=0;WKST=MO;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -518,7 +521,7 @@ func TestSet_String_OmitsIgnoredParams_Timed(t *testing.T) {
 		"DTSTART:20240101T100000Z",
 		"RRULE:FREQ=DAILY;COUNT=-1;INTERVAL=0;WKST=MO;BYHOUR=9;BYMINUTE=30;BYSECOND=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -538,7 +541,7 @@ func TestSet_String_OmitsNegativeCount_KeepsUntil(t *testing.T) {
 		"DTSTART:20240101T000000Z",
 		"RRULE:FREQ=DAILY;COUNT=-1;UNTIL=20240103T000000Z",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -554,7 +557,7 @@ func TestSetParse_DTSTARTNotFirst_Ignored(t *testing.T) {
 		"RRULE:FREQ=DAILY;COUNT=1",
 		"DTSTART:20250101T000000Z",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -672,7 +675,7 @@ func TestSet_String_OmitsCountZero(t *testing.T) {
 		"DTSTART:20240101T000000Z",
 		"RRULE:FREQ=DAILY;COUNT=0",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -691,12 +694,12 @@ func TestSet_String_OmitsCountZero(t *testing.T) {
 }
 
 func TestSet_String_ExcludeDTSTARTWhenDisabled(t *testing.T) {
-	set := New(ROption{
+	set, err := New(ROption{
 		Freq:    DAILY,
 		Dtstart: time.Date(2024, 2, 1, 9, 0, 0, 0, time.UTC),
 	})
-	if set == nil {
-		t.Fatal("failed to create recurrence")
+	if err != nil {
+		t.Fatal(err)
 	}
 	got := set.RRuleString()
 	want := "RRULE:FREQ=DAILY"
@@ -712,7 +715,7 @@ func TestSetParse_CommaSeparatedDates_StringSplitsLines(t *testing.T) {
 		"RDATE:20240104T090000Z,20240105T090000Z",
 		"EXDATE:20240102T090000Z,20240103T090000Z",
 	}
-	set, err := StrSliceToRRuleSet(lines)
+	set, err := Parse(lines...)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
