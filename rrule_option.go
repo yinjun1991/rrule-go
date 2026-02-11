@@ -37,7 +37,7 @@ type ROption struct {
 //	DTSTART;TZID=America/New_York:19970105T083000
 //	RRULE:FREQ=YEARLY;INTERVAL=2;BYMONTH=1;BYDAY=SU;BYHOUR=8,9;BYMINUTE=30
 func (option *ROption) String() string {
-	str := option.RRuleString()
+	str := rruleStringFromOption(option)
 	if option.Dtstart.IsZero() {
 		return str
 	}
@@ -55,8 +55,7 @@ func (option *ROption) String() string {
 	return fmt.Sprintf("DTSTART%s\nRRULE:%s", timeToRFCDatetimeStr(dtstart), str)
 }
 
-// RRuleString returns RRULE string exclude DTSTART
-func (option *ROption) RRuleString() string {
+func rruleStringFromOption(option *ROption) string {
 	result := []string{fmt.Sprintf("FREQ=%v", option.Freq)}
 	if option.Interval != 0 {
 		result = append(result, fmt.Sprintf("INTERVAL=%v", option.Interval))
@@ -64,24 +63,18 @@ func (option *ROption) RRuleString() string {
 	if option.Wkst != MO {
 		result = append(result, fmt.Sprintf("WKST=%v", option.Wkst))
 	}
-	// Only include COUNT when it is a positive integer.
-	// Negative or zero COUNT means "unlimited" and should not appear in RRULE output.
 	if option.Count > 0 {
 		result = append(result, fmt.Sprintf("COUNT=%v", option.Count))
 	}
 	if !option.Until.IsZero() {
-		// RFC 5545: UNTIL value type must match DTSTART value type
-		// For all-day events (floating time), UNTIL should also use floating time
 		if option.AllDay {
 			loc := time.UTC
 			if !option.Dtstart.IsZero() {
 				loc = option.Dtstart.Location()
 			}
 			until := option.Until.In(loc)
-			// For all-day events, use DATE format (no time part) as per RFC 5545
 			result = append(result, fmt.Sprintf("UNTIL=%v", until.Format(DateFormat)))
 		} else {
-			// For date-time events, UNTIL is represented in UTC
 			result = append(result, fmt.Sprintf("UNTIL=%v", timeToUTCStr(option.Until)))
 		}
 	}
@@ -97,8 +90,6 @@ func (option *ROption) RRuleString() string {
 		}
 		result = append(result, fmt.Sprintf("BYDAY=%s", strings.Join(valueStr, ",")))
 	}
-	// For all-day events, time-of-day components are ignored by engines,
-	// so we omit BYHOUR/BYMINUTE/BYSECOND in the RRULE output for better interoperability.
 	if !option.AllDay {
 		result = appendIntsOption(result, "BYHOUR", option.Byhour)
 		result = appendIntsOption(result, "BYMINUTE", option.Byminute)
@@ -239,4 +230,53 @@ func detectDtstartKind(dtstartValue string) (bool, bool, bool) {
 	}
 	isUTC := strings.HasSuffix(timePart, "Z")
 	return false, hasTZID, isUTC
+}
+
+func validateBounds(arg ROption) error {
+	bounds := []struct {
+		field     []int
+		param     string
+		bound     []int
+		plusMinus bool
+	}{
+		{arg.Bysecond, "bysecond", []int{0, 59}, false},
+		{arg.Byminute, "byminute", []int{0, 59}, false},
+		{arg.Byhour, "byhour", []int{0, 23}, false},
+		{arg.Bymonthday, "bymonthday", []int{1, 31}, true},
+		{arg.Byyearday, "byyearday", []int{1, 366}, true},
+		{arg.Byweekno, "byweekno", []int{1, 53}, true},
+		{arg.Bymonth, "bymonth", []int{1, 12}, false},
+		{arg.Bysetpos, "bysetpos", []int{1, 366}, true},
+	}
+
+	checkBounds := func(param string, value int, bounds []int, plusMinus bool) error {
+		if !(value >= bounds[0] && value <= bounds[1]) && (!plusMinus || !(value <= -bounds[0] && value >= -bounds[1])) {
+			plusMinusBounds := ""
+			if plusMinus {
+				plusMinusBounds = fmt.Sprintf(" or %d and %d", -bounds[0], -bounds[1])
+			}
+			return fmt.Errorf("%s must be between %d and %d%s", param, bounds[0], bounds[1], plusMinusBounds)
+		}
+		return nil
+	}
+
+	for _, b := range bounds {
+		for _, value := range b.field {
+			if err := checkBounds(b.param, value, b.bound, b.plusMinus); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, w := range arg.Byweekday {
+		if w.n > 53 || w.n < -53 {
+			return errors.New("byday must be between 1 and 53 or -1 and -53")
+		}
+	}
+
+	if arg.Interval < 0 {
+		return errors.New("interval must be greater than 0")
+	}
+
+	return nil
 }

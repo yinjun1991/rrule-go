@@ -8,7 +8,7 @@ import (
 )
 
 func TestRRuleChangeAnalyzer_AnalyzeChanges(t *testing.T) {
-	analyzer := NewRRuleChangeAnalyzer()
+	analyzer := NewRecurrenceDiffer()
 
 	t.Run("NoChange", func(t *testing.T) {
 		t.Run("identical rules", func(t *testing.T) {
@@ -382,7 +382,7 @@ func TestRRuleChangeAnalyzer_AnalyzeChanges(t *testing.T) {
 }
 
 func TestRRuleChangeAnalyzer_WeekdaySliceComparison(t *testing.T) {
-	analyzer := NewRRuleChangeAnalyzer()
+	analyzer := NewRecurrenceDiffer()
 
 	t.Run("equal slices", func(t *testing.T) {
 		// Indirectly test BYDAY comparison via AnalyzeChanges.
@@ -406,7 +406,7 @@ func TestRRuleChangeAnalyzer_WeekdaySliceComparison(t *testing.T) {
 }
 
 func TestRRuleChangeAnalyzer_IntSliceComparison(t *testing.T) {
-	analyzer := NewRRuleChangeAnalyzer()
+	analyzer := NewRecurrenceDiffer()
 
 	t.Run("bymonth changes", func(t *testing.T) {
 		oldRules := []string{"RRULE:FREQ=YEARLY;BYMONTH=1,6,12;COUNT=5"}
@@ -429,7 +429,7 @@ func TestRRuleChangeAnalyzer_IntSliceComparison(t *testing.T) {
 }
 
 func TestRRuleChangeAnalyzer_ErrorHandling(t *testing.T) {
-	analyzer := NewRRuleChangeAnalyzer()
+	analyzer := NewRecurrenceDiffer()
 
 	t.Run("malformed rrule", func(t *testing.T) {
 		oldRules := []string{"RRULE:FREQ=INVALID"}
@@ -442,7 +442,7 @@ func TestRRuleChangeAnalyzer_ErrorHandling(t *testing.T) {
 	t.Run("nil analyzer", func(t *testing.T) {
 		// In Go, calling a method on a nil pointer won't panic if it doesn't access receiver fields.
 		// AnalyzeChanges calls other methods, which may access fields.
-		var analyzer *RRuleChangeAnalyzer
+		var analyzer *RecurrenceDiffer
 		// Go allows methods on nil receivers, so this test checks actual behavior.
 		_, err := analyzer.AnalyzeChanges([]string{}, []string{})
 		// If the method accesses receiver fields it will panic; otherwise it may succeed.
@@ -455,7 +455,7 @@ func TestRRuleChangeAnalyzer_ErrorHandling(t *testing.T) {
 
 // Benchmark.
 func BenchmarkRRuleChangeAnalyzer_AnalyzeChanges(b *testing.B) {
-	analyzer := NewRRuleChangeAnalyzer()
+	analyzer := NewRecurrenceDiffer()
 	oldRules := []string{
 		"RRULE:FREQ=DAILY;UNTIL=20240331T235959Z",
 		"EXDATE:20240101T100000Z",

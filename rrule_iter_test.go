@@ -108,7 +108,7 @@ func TestIteratorFrequencyAdvanced(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -222,7 +222,7 @@ func TestIteratorBasicFrequencies(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -376,7 +376,7 @@ func TestIteratorByRulesCombinations(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -441,7 +441,7 @@ func TestIteratorAllDayEvents(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -498,7 +498,7 @@ func TestIteratorTimezones(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -580,7 +580,7 @@ func TestIteratorByRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -644,7 +644,7 @@ func TestIteratorBoundaryConditions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -724,7 +724,7 @@ func TestIteratorInterval(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -775,7 +775,7 @@ func TestIteratorUntil(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -830,7 +830,7 @@ func TestIteratorComplexByRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -918,7 +918,7 @@ func TestIteratorLeapYearAndBoundaries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -965,7 +965,7 @@ func TestIteratorEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -1058,7 +1058,7 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -1166,7 +1166,7 @@ func TestIteratorTimezoneHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -1181,7 +1181,7 @@ func TestIteratorTimezoneHandling(t *testing.T) {
 // TestIteratorPerformance tests iterator performance and memory usage.
 func TestIteratorPerformance(t *testing.T) {
 	// Test performance with many iterations.
-	r, err := NewRRule(ROption{
+	r, err := newRecurrence(ROption{
 		Freq:    DAILY,
 		Count:   1000,
 		Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
@@ -1207,7 +1207,7 @@ func TestIteratorPerformance(t *testing.T) {
 
 // TestIteratorNext tests the iterator's next() method.
 func TestIteratorNext(t *testing.T) {
-	r, err := NewRRule(ROption{
+	r, err := newRecurrence(ROption{
 		Freq:    DAILY,
 		Count:   3,
 		Dtstart: time.Date(2020, 1, 1, 10, 0, 0, 0, time.UTC),
@@ -1242,7 +1242,7 @@ func TestIteratorNext(t *testing.T) {
 
 // TestIteratorMaxYear tests the max year limit.
 func TestIteratorMaxYear(t *testing.T) {
-	r, err := NewRRule(ROption{
+	r, err := newRecurrence(ROption{
 		Freq:    YEARLY,
 		Count:   10,
 		Dtstart: time.Date(9995, 1, 1, 10, 0, 0, 0, time.UTC), // Close to MAXYEAR
@@ -1353,7 +1353,7 @@ func TestIteratorErrorAndNegativeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r, err := NewRRule(tt.opt)
+			r, err := newRecurrence(tt.opt)
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -1418,7 +1418,7 @@ func TestIteratorPerformanceAndMemory(t *testing.T) {
 			start := time.Now()
 
 			// Measure performance.
-			rrule, err := NewRRule(tt.opt)
+			rrule, err := newRecurrence(tt.opt)
 			if err != nil {
 				t.Fatalf("Failed to create RRule: %v", err)
 			}
@@ -1449,7 +1449,7 @@ func TestIteratorMemoryReuse(t *testing.T) {
 		Count:   100,
 	}
 
-	rrule, err := NewRRule(opt)
+	rrule, err := newRecurrence(opt)
 	if err != nil {
 		t.Fatalf("Failed to create RRule: %v", err)
 	}
@@ -1482,7 +1482,7 @@ func TestIteratorConcurrency(t *testing.T) {
 		Count:   1000,
 	}
 
-	rrule, err := NewRRule(opt)
+	rrule, err := newRecurrence(opt)
 	if err != nil {
 		t.Fatalf("Failed to create RRule: %v", err)
 	}

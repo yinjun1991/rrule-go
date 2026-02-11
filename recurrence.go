@@ -12,7 +12,6 @@ import (
 
 // Recurrence allows more complex recurrence setups, mixing multiple rules, dates, exclusion rules, and exclusion dates
 type Recurrence struct {
-	Options                 ROption
 	freq                    Frequency
 	dtstart                 time.Time
 	interval                int
@@ -46,7 +45,7 @@ func New(option ROption) *Recurrence {
 	return rec
 }
 
-func Parse(lines []string) *Recurrence {
+func Parse(lines ...string) *Recurrence {
 	set, err := StrSliceToRRuleSet(lines)
 	if err != nil {
 		return nil
@@ -81,8 +80,6 @@ func (r *Recurrence) setRuleOptions(option ROption) error {
 	if option.AllDay && !r.allDay {
 		r.allDay = true
 		r.normalizeAllDayTimes()
-	} else if r.allDay && !option.AllDay {
-		option.AllDay = true
 	}
 
 	if option.Dtstart.IsZero() && !r.dtstart.IsZero() {
@@ -93,16 +90,12 @@ func (r *Recurrence) setRuleOptions(option ROption) error {
 		return err
 	}
 
-	if !r.dtstart.IsZero() {
-		r.Options.Dtstart = r.dtstart
-	}
-
 	r.hasRule = true
 	return nil
 }
 
 func (r *Recurrence) rebuildRule() {
-	_ = r.applyRule(r.Options)
+	_ = r.applyRule(r.ruleOptionFromState())
 	r.hasRule = true
 }
 
@@ -110,7 +103,6 @@ func (r *Recurrence) applyRule(arg ROption) error {
 	if err := validateBounds(arg); err != nil {
 		return err
 	}
-	r.Options = arg
 	r.allDay = arg.AllDay
 
 	r.freq = arg.Freq
@@ -150,10 +142,13 @@ func (r *Recurrence) applyRule(arg ROption) error {
 	}
 
 	r.wkst = arg.Wkst.weekday
+	r.bymonthday = nil
+	r.bynmonthday = nil
+	r.byweekday = nil
+	r.bynweekday = nil
 	r.bysetpos = arg.Bysetpos
 
 	if len(arg.Byweekno) == 0 &&
-		len(arg.Byyearday) == 0 &&
 		len(arg.Bymonthday) == 0 &&
 		len(arg.Byweekday) == 0 &&
 		len(arg.Byeaster) == 0 {
@@ -237,53 +232,53 @@ func (r *Recurrence) applyRule(arg ROption) error {
 	return nil
 }
 
-func validateBounds(arg ROption) error {
-	bounds := []struct {
-		field     []int
-		param     string
-		bound     []int
-		plusMinus bool
-	}{
-		{arg.Bysecond, "bysecond", []int{0, 59}, false},
-		{arg.Byminute, "byminute", []int{0, 59}, false},
-		{arg.Byhour, "byhour", []int{0, 23}, false},
-		{arg.Bymonthday, "bymonthday", []int{1, 31}, true},
-		{arg.Byyearday, "byyearday", []int{1, 366}, true},
-		{arg.Byweekno, "byweekno", []int{1, 53}, true},
-		{arg.Bymonth, "bymonth", []int{1, 12}, false},
-		{arg.Bysetpos, "bysetpos", []int{1, 366}, true},
+func (r *Recurrence) ruleOptionFromState() ROption {
+	option := ROption{
+		Freq:      r.freq,
+		Dtstart:   r.dtstart,
+		Interval:  r.interval,
+		Wkst:      Weekday{weekday: r.wkst},
+		Count:     r.count,
+		AllDay:    r.allDay,
+		Bysetpos:  cloneIntSlice(r.bysetpos),
+		Bymonth:   cloneIntSlice(r.bymonth),
+		Byyearday: cloneIntSlice(r.byyearday),
+		Byweekno:  cloneIntSlice(r.byweekno),
+		Byhour:    cloneIntSlice(r.byhour),
+		Byminute:  cloneIntSlice(r.byminute),
+		Bysecond:  cloneIntSlice(r.bysecond),
+		Byeaster:  cloneIntSlice(r.byeaster),
 	}
 
-	checkBounds := func(param string, value int, bounds []int, plusMinus bool) error {
-		if !(value >= bounds[0] && value <= bounds[1]) && (!plusMinus || !(value <= -bounds[0] && value >= -bounds[1])) {
-			plusMinusBounds := ""
-			if plusMinus {
-				plusMinusBounds = fmt.Sprintf(" or %d and %d", -bounds[0], -bounds[1])
-			}
-			return fmt.Errorf("%s must be between %d and %d%s", param, bounds[0], bounds[1], plusMinusBounds)
+	if !r.until.IsZero() {
+		maxUntil := r.dtstart.Add(time.Duration(1<<63 - 1))
+		if !r.until.Equal(maxUntil) {
+			option.Until = r.until
 		}
+	}
+
+	byMonthDay := make([]int, 0, len(r.bymonthday)+len(r.bynmonthday))
+	byMonthDay = append(byMonthDay, r.bymonthday...)
+	byMonthDay = append(byMonthDay, r.bynmonthday...)
+	option.Bymonthday = byMonthDay
+
+	byWeekday := make([]Weekday, 0, len(r.byweekday)+len(r.bynweekday))
+	for _, wday := range r.byweekday {
+		byWeekday = append(byWeekday, Weekday{weekday: wday})
+	}
+	byWeekday = append(byWeekday, r.bynweekday...)
+	option.Byweekday = byWeekday
+
+	return option
+}
+
+func cloneIntSlice(values []int) []int {
+	if len(values) == 0 {
 		return nil
 	}
-
-	for _, b := range bounds {
-		for _, value := range b.field {
-			if err := checkBounds(b.param, value, b.bound, b.plusMinus); err != nil {
-				return err
-			}
-		}
-	}
-
-	for _, w := range arg.Byweekday {
-		if w.n > 53 || w.n < -53 {
-			return errors.New("byday must be between 1 and 53 or -1 and -53")
-		}
-	}
-
-	if arg.Interval < 0 {
-		return errors.New("interval must be greater than 0")
-	}
-
-	return nil
+	out := make([]int, len(values))
+	copy(out, values)
+	return out
 }
 
 func (r *Recurrence) ruleIterator() Next {
@@ -320,56 +315,188 @@ func (r *Recurrence) ruleIterator() Next {
 	return iterator.next
 }
 
-// Recurrence returns a slice of all the recurrence rules for a set
-func (set *Recurrence) Recurrence(includeDTSTART bool) []string {
+// Strings returns a slice of all the recurrence rules for a set
+func (set *Recurrence) Strings() []string {
 	var res []string
 
-	if !set.dtstart.IsZero() && includeDTSTART {
-		// No colon, DTSTART may have TZID, which would require a semicolon after DTSTART
-		// RFC 5545: For all-day events, use VALUE=DATE format
-		if set.allDay {
-			// All-day events should use VALUE=DATE format as per RFC 5545
-			year, month, day := set.dtstart.Date()
-			dateStr := fmt.Sprintf("%04d%02d%02d", year, int(month), day)
-			res = append(res, fmt.Sprintf("DTSTART;VALUE=DATE:%s", dateStr))
-		} else {
-			res = append(res, fmt.Sprintf("DTSTART%s", timeToRFCDatetimeStr(set.dtstart)))
-		}
+	str := set.DTStartString()
+	if str != "" {
+		res = append(res, str)
 	}
 
-	if set.hasRule {
-		res = append(res, fmt.Sprintf("RRULE:%s", set.Options.RRuleString()))
+	str = set.RRuleString()
+	if str != "" {
+		res = append(res, str)
 	}
 
-	for _, item := range set.rdate {
-		// RFC 5545: RDATE values should match DTSTART value type
-		if set.allDay {
-			// All-day events: use VALUE=DATE format as per RFC 5545
-			year, month, day := item.Date()
-			dateStr := fmt.Sprintf("%04d%02d%02d", year, int(month), day)
-			res = append(res, fmt.Sprintf("RDATE;VALUE=DATE:%s", dateStr))
-		} else {
-			res = append(res, fmt.Sprintf("RDATE%s", timeToRFCDatetimeStr(item)))
-		}
+	str = set.EXDateString()
+	if str != "" {
+		res = append(res, str)
 	}
 
-	for _, item := range set.exdate {
-		// RFC 5545: EXDATE values should match DTSTART value type
-		if set.allDay {
-			// All-day events: use VALUE=DATE format as per RFC 5545
-			year, month, day := item.Date()
-			dateStr := fmt.Sprintf("%04d%02d%02d", year, int(month), day)
-			res = append(res, fmt.Sprintf("EXDATE;VALUE=DATE:%s", dateStr))
-		} else {
-			res = append(res, fmt.Sprintf("EXDATE%s", timeToRFCDatetimeStr(item)))
-		}
+	str = set.RDateString()
+	if str != "" {
+		res = append(res, str)
 	}
+
 	return res
 }
 
-func (set *Recurrence) String(includeDTSTART bool) string {
-	res := set.Recurrence(includeDTSTART)
+// String returns the full RFC 5545 recurrence text, one property per line.
+// Example:
+// DTSTART:20240101T090000Z
+// RRULE:FREQ=DAILY;COUNT=2
+// EXDATE:20240102T090000Z
+func (set *Recurrence) String() string {
+	res := set.Strings()
 	return strings.Join(res, "\n")
+}
+
+// DTStartString returns DTSTART serialized as a single line.
+// Example: DTSTART;VALUE=DATE:20240101
+// Example: DTSTART:20240101T090000Z
+// Example: DTSTART;TZID=Asia/Shanghai:20240101T090000
+func (set *Recurrence) DTStartString() string {
+	if set.dtstart.IsZero() {
+		return ""
+	}
+	// No colon, DTSTART may have TZID, which would require a semicolon after DTSTART
+	// RFC 5545: For all-day events, use VALUE=DATE format
+	if set.allDay {
+		// All-day events should use VALUE=DATE format as per RFC 5545
+		return fmt.Sprintf("DTSTART;VALUE=DATE:%s", set.dtstart.Format(DateFormat))
+	}
+
+	return fmt.Sprintf("DTSTART%s", timeToRFCDatetimeStr(set.dtstart))
+}
+
+// RRuleString returns RRULE serialized as a single line without DTSTART.
+// Example: RRULE:FREQ=DAILY;COUNT=5
+func (set *Recurrence) RRuleString() string {
+	option := set.ruleOptionFromState()
+	return fmt.Sprintf("RRULE:%s", rruleStringFromOption(&option))
+}
+
+// EXDateString returns EXDATE lines serialized as a single string.
+// When DTSTART is available, EXDATE is normalized to the DTSTART timezone to match
+// RFC 5545 requirements; UTC values use a trailing Z without TZID.
+// When DTSTART is missing, EXDATE entries are grouped by timezone.
+// Example: EXDATE;VALUE=DATE:20240110,20240112
+// Example: EXDATE:20240110T090000Z,20240112T090000Z
+// Example: EXDATE;TZID=Asia/Shanghai:20240110T090000,20240112T090000
+func (set *Recurrence) EXDateString() string {
+	if len(set.exdate) == 0 {
+		return ""
+	}
+	if set.allDay {
+		values := make([]string, 0, len(set.exdate))
+		for _, item := range set.exdate {
+			values = append(values, item.Format(DateFormat))
+		}
+		return fmt.Sprintf("EXDATE;VALUE=DATE:%s", strings.Join(values, ","))
+	}
+
+	if !set.dtstart.IsZero() {
+		refLoc := set.dtstart.Location()
+		if refLoc == time.UTC {
+			values := make([]string, 0, len(set.exdate))
+			for _, item := range set.exdate {
+				values = append(values, item.In(time.UTC).Format(DateTimeFormat))
+			}
+			return fmt.Sprintf("EXDATE:%s", strings.Join(values, ","))
+		}
+		values := make([]string, 0, len(set.exdate))
+		for _, item := range set.exdate {
+			values = append(values, item.In(refLoc).Format(LocalDateTimeFormat))
+		}
+		return fmt.Sprintf("EXDATE;TZID=%s:%s", refLoc.String(), strings.Join(values, ","))
+	}
+
+	valuesByTZID := make(map[string][]string)
+	var tzidOrder []string
+	for _, item := range set.exdate {
+		tzid := item.Location().String()
+		if _, ok := valuesByTZID[tzid]; !ok {
+			tzidOrder = append(tzidOrder, tzid)
+		}
+		if tzid == "UTC" {
+			valuesByTZID[tzid] = append(valuesByTZID[tzid], item.Format(DateTimeFormat))
+		} else {
+			valuesByTZID[tzid] = append(valuesByTZID[tzid], item.Format(LocalDateTimeFormat))
+		}
+	}
+
+	lines := make([]string, 0, len(valuesByTZID))
+	for _, tzid := range tzidOrder {
+		values := strings.Join(valuesByTZID[tzid], ",")
+		if tzid == "UTC" {
+			lines = append(lines, fmt.Sprintf("EXDATE:%s", values))
+		} else {
+			lines = append(lines, fmt.Sprintf("EXDATE;TZID=%s:%s", tzid, values))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// RDateString returns RDATE lines serialized as a single string.
+// When DTSTART is available, RDATE is normalized to the DTSTART timezone to match
+// RFC 5545 requirements; UTC values use a trailing Z without TZID.
+// When DTSTART is missing, RDATE entries are grouped by timezone.
+// Example: RDATE;VALUE=DATE:20240301,20240303
+// Example: RDATE:20240301T090000Z,20240305T090000Z
+// Example: RDATE;TZID=Asia/Shanghai:20240301T090000,20240305T090000
+func (set *Recurrence) RDateString() string {
+	if len(set.rdate) == 0 {
+		return ""
+	}
+	if set.allDay {
+		values := make([]string, 0, len(set.rdate))
+		for _, item := range set.rdate {
+			values = append(values, item.Format(DateFormat))
+		}
+		return fmt.Sprintf("RDATE;VALUE=DATE:%s", strings.Join(values, ","))
+	}
+
+	if !set.dtstart.IsZero() {
+		refLoc := set.dtstart.Location()
+		if refLoc == time.UTC {
+			values := make([]string, 0, len(set.rdate))
+			for _, item := range set.rdate {
+				values = append(values, item.In(time.UTC).Format(DateTimeFormat))
+			}
+			return fmt.Sprintf("RDATE:%s", strings.Join(values, ","))
+		}
+		values := make([]string, 0, len(set.rdate))
+		for _, item := range set.rdate {
+			values = append(values, item.In(refLoc).Format(LocalDateTimeFormat))
+		}
+		return fmt.Sprintf("RDATE;TZID=%s:%s", refLoc.String(), strings.Join(values, ","))
+	}
+
+	valuesByTZID := make(map[string][]string)
+	var tzidOrder []string
+	for _, item := range set.rdate {
+		tzid := item.Location().String()
+		if _, ok := valuesByTZID[tzid]; !ok {
+			tzidOrder = append(tzidOrder, tzid)
+		}
+		if tzid == "UTC" {
+			valuesByTZID[tzid] = append(valuesByTZID[tzid], item.Format(DateTimeFormat))
+		} else {
+			valuesByTZID[tzid] = append(valuesByTZID[tzid], item.Format(LocalDateTimeFormat))
+		}
+	}
+
+	lines := make([]string, 0, len(valuesByTZID))
+	for _, tzid := range tzidOrder {
+		values := strings.Join(valuesByTZID[tzid], ",")
+		if tzid == "UTC" {
+			lines = append(lines, fmt.Sprintf("RDATE:%s", values))
+		} else {
+			lines = append(lines, fmt.Sprintf("RDATE;TZID=%s:%s", tzid, values))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // DTStart sets dtstart property for set.
@@ -386,7 +513,6 @@ func (set *Recurrence) DTStart(dtstart time.Time) {
 		set.dtstart = dtstart.Truncate(time.Second)
 	}
 
-	set.Options.Dtstart = set.dtstart
 	if set.hasRule {
 		set.rebuildRule()
 	}
@@ -395,13 +521,6 @@ func (set *Recurrence) DTStart(dtstart time.Time) {
 // GetDTStart gets DTSTART for set
 func (set *Recurrence) GetDTStart() time.Time {
 	return set.dtstart
-}
-
-func (set *Recurrence) GetOptions() *ROption {
-	if !set.hasRule {
-		return nil
-	}
-	return &set.Options
 }
 
 // RDate include the given datetime instance in the recurrence set generation.
@@ -506,14 +625,9 @@ func (set *Recurrence) SetAllDay(allDay bool) {
 			year, month, day := exdate.Date()
 			set.exdate[i] = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 		}
-
-		if !set.dtstart.IsZero() {
-			set.Options.Dtstart = set.dtstart
-		}
 	}
 
 	if set.hasRule {
-		set.Options.AllDay = allDay
 		set.rebuildRule()
 	}
 }
