@@ -144,7 +144,7 @@ func (r *Recurrence) applyRule(arg ROption) error {
 	r.dtstart = arg.Dtstart
 
 	if arg.Until.IsZero() {
-		r.until = r.dtstart.Add(time.Duration(1<<63 - 1))
+		r.until = time.Time{}
 	} else {
 		if arg.AllDay {
 			year, month, day := arg.Until.Date()
@@ -269,10 +269,7 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 	}
 
 	if !r.until.IsZero() {
-		maxUntil := r.dtstart.Add(time.Duration(1<<63 - 1))
-		if !r.until.Equal(maxUntil) {
-			option.Until = r.until
-		}
+		option.Until = r.until
 	}
 
 	if !r.bymonthExplicit {

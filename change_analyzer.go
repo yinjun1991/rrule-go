@@ -380,8 +380,7 @@ func ruleUntilValue(set *Recurrence) *time.Time {
 	if set == nil || !set.hasRule {
 		return nil
 	}
-	maxUntil := set.dtstart.Add(time.Duration(1<<63 - 1))
-	if set.until.Equal(maxUntil) {
+	if set.until.IsZero() {
 		return nil
 	}
 	value := set.until
