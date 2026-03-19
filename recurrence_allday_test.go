@@ -1214,9 +1214,6 @@ func TestAllDaySetStringWithRDate(t *testing.T) {
 			},
 			expected: []string{
 				"DTSTART;VALUE=DATE:20230610",
-				"RDATE;VALUE=DATE:20230615",
-				"RDATE;VALUE=DATE:20230620",
-				"RDATE;VALUE=DATE:20230625",
 			},
 		},
 	}
@@ -1234,24 +1231,44 @@ func TestAllDaySetStringWithRDate(t *testing.T) {
 			output := set.String()
 			t.Logf("RDATE test %s output: %s", tc.name, output)
 
-			// Verify all expected strings are present.
+			// Verify expected DTSTART strings are present.
 			for _, expected := range tc.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("Expected %s in output, got: %s", expected, output)
 				}
 			}
 
-			// Verify RDATE uses VALUE=DATE format and has no time part.
+			rdateLine := ""
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				if strings.HasPrefix(line, "RDATE") {
+					rdateLine = line
 					if !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("RDATE should use VALUE=DATE format for all-day events, got: %s", line)
 					}
-					// Check for a time component (T followed by digits).
 					if strings.Contains(line, "T") && !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("RDATE should not contain time part for all-day events, got: %s", line)
 					}
+				}
+			}
+			if rdateLine == "" {
+				t.Fatalf("RDATE line not found in output: %s", output)
+			}
+			const prefix = "RDATE;VALUE=DATE:"
+			if !strings.HasPrefix(rdateLine, prefix) {
+				t.Fatalf("RDATE line should start with %s, got: %s", prefix, rdateLine)
+			}
+
+			gotDates := strings.Split(strings.TrimPrefix(rdateLine, prefix), ",")
+			if len(gotDates) != len(tc.rdates) {
+				t.Fatalf("Expected %d RDATE values, got %d in line: %s", len(tc.rdates), len(gotDates), rdateLine)
+			}
+
+			for i, rdate := range tc.rdates {
+				y, m, d := rdate.Date()
+				wantDate := time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Format(DateFormat)
+				if gotDates[i] != wantDate {
+					t.Errorf("Expected RDATE value[%d] %s, got %s", i, wantDate, gotDates[i])
 				}
 			}
 		})
@@ -1287,9 +1304,6 @@ func TestAllDaySetStringWithExDate(t *testing.T) {
 			},
 			expected: []string{
 				"DTSTART;VALUE=DATE:20230801",
-				"EXDATE;VALUE=DATE:20230805",
-				"EXDATE;VALUE=DATE:20230810",
-				"EXDATE;VALUE=DATE:20230815",
 			},
 		},
 	}
@@ -1307,24 +1321,44 @@ func TestAllDaySetStringWithExDate(t *testing.T) {
 			output := set.String()
 			t.Logf("EXDATE test %s output: %s", tc.name, output)
 
-			// Verify all expected strings are present.
+			// Verify expected DTSTART strings are present.
 			for _, expected := range tc.expected {
 				if !strings.Contains(output, expected) {
 					t.Errorf("Expected %s in output, got: %s", expected, output)
 				}
 			}
 
-			// Verify EXDATE uses VALUE=DATE format and has no time part.
+			exdateLine := ""
 			lines := strings.Split(output, "\n")
 			for _, line := range lines {
 				if strings.HasPrefix(line, "EXDATE") {
+					exdateLine = line
 					if !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("EXDATE should use VALUE=DATE format for all-day events, got: %s", line)
 					}
-					// Check for a time component (T followed by digits).
 					if strings.Contains(line, "T") && !strings.Contains(line, "VALUE=DATE") {
 						t.Errorf("EXDATE should not contain time part for all-day events, got: %s", line)
 					}
+				}
+			}
+			if exdateLine == "" {
+				t.Fatalf("EXDATE line not found in output: %s", output)
+			}
+			const prefix = "EXDATE;VALUE=DATE:"
+			if !strings.HasPrefix(exdateLine, prefix) {
+				t.Fatalf("EXDATE line should start with %s, got: %s", prefix, exdateLine)
+			}
+
+			gotDates := strings.Split(strings.TrimPrefix(exdateLine, prefix), ",")
+			if len(gotDates) != len(tc.exdates) {
+				t.Fatalf("Expected %d EXDATE values, got %d in line: %s", len(tc.exdates), len(gotDates), exdateLine)
+			}
+
+			for i, exdate := range tc.exdates {
+				y, m, d := exdate.Date()
+				wantDate := time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Format(DateFormat)
+				if gotDates[i] != wantDate {
+					t.Errorf("Expected EXDATE value[%d] %s, got %s", i, wantDate, gotDates[i])
 				}
 			}
 		})
@@ -1359,10 +1393,6 @@ func TestAllDaySetStringComplex(t *testing.T) {
 	expectedStrings := []string{
 		"DTSTART;VALUE=DATE:20230901",
 		"RRULE:FREQ=WEEKLY;UNTIL=20230930",
-		"RDATE;VALUE=DATE:20230915",
-		"RDATE;VALUE=DATE:20230925",
-		"EXDATE;VALUE=DATE:20230908",
-		"EXDATE;VALUE=DATE:20230922",
 	}
 
 	for _, expected := range expectedStrings {
@@ -1396,6 +1426,54 @@ func TestAllDaySetStringComplex(t *testing.T) {
 			}
 		}
 	}
+
+	rdateLine := ""
+	exdateLine := ""
+	for _, line := range lines {
+		if strings.HasPrefix(line, "RDATE") {
+			rdateLine = line
+		}
+		if strings.HasPrefix(line, "EXDATE") {
+			exdateLine = line
+		}
+	}
+	if rdateLine == "" {
+		t.Fatalf("RDATE line not found in output: %s", output)
+	}
+	if exdateLine == "" {
+		t.Fatalf("EXDATE line not found in output: %s", output)
+	}
+
+	rdatePrefix := "RDATE;VALUE=DATE:"
+	exdatePrefix := "EXDATE;VALUE=DATE:"
+	if !strings.HasPrefix(rdateLine, rdatePrefix) {
+		t.Fatalf("RDATE line should start with %s, got: %s", rdatePrefix, rdateLine)
+	}
+	if !strings.HasPrefix(exdateLine, exdatePrefix) {
+		t.Fatalf("EXDATE line should start with %s, got: %s", exdatePrefix, exdateLine)
+	}
+
+	gotRDates := strings.Split(strings.TrimPrefix(rdateLine, rdatePrefix), ",")
+	gotExDates := strings.Split(strings.TrimPrefix(exdateLine, exdatePrefix), ",")
+	if len(gotRDates) != 2 {
+		t.Fatalf("Expected 2 RDATE values, got %d in line: %s", len(gotRDates), rdateLine)
+	}
+	if len(gotExDates) != 2 {
+		t.Fatalf("Expected 2 EXDATE values, got %d in line: %s", len(gotExDates), exdateLine)
+	}
+
+	expectedRDates := []string{"20230915", "20230925"}
+	expectedExDates := []string{"20230908", "20230922"}
+	for i, expected := range expectedRDates {
+		if gotRDates[i] != expected {
+			t.Errorf("Expected RDATE value[%d] %s, got %s", i, expected, gotRDates[i])
+		}
+	}
+	for i, expected := range expectedExDates {
+		if gotExDates[i] != expected {
+			t.Errorf("Expected EXDATE value[%d] %s, got %s", i, expected, gotExDates[i])
+		}
+	}
 }
 
 func TestStrSliceToRRuleSetDetectsAllDayFromRDate(t *testing.T) {
@@ -1423,10 +1501,10 @@ func TestStrSliceToRRuleSetDetectsAllDayFromRDate(t *testing.T) {
 		t.Fatalf("RDATEs were not normalized to floating midnight: %v", rdates)
 	}
 
-	recurrence := set.RRuleString()
-	if !strings.Contains(recurrence, "RDATE;VALUE=DATE:20240301") ||
-		!strings.Contains(recurrence, "RDATE;VALUE=DATE:20240303") {
-		t.Fatalf("Expected VALUE=DATE serialization, got %q", recurrence)
+	rdateString := set.RDateString()
+	expectedRDateString := "RDATE;VALUE=DATE:20240301,20240303"
+	if rdateString != expectedRDateString {
+		t.Fatalf("Expected %q, got %q", expectedRDateString, rdateString)
 	}
 }
 
@@ -1455,9 +1533,9 @@ func TestStrSliceToRRuleSetDetectsAllDayFromExDate(t *testing.T) {
 		t.Fatalf("EXDATEs were not normalized to floating midnight: %v", exdates)
 	}
 
-	recurrence := set.RRuleString()
-	if !strings.Contains(recurrence, "EXDATE;VALUE=DATE:20250110") ||
-		!strings.Contains(recurrence, "EXDATE;VALUE=DATE:20250112") {
-		t.Fatalf("Expected VALUE=DATE serialization, got %q", recurrence)
+	exdateString := set.EXDateString()
+	expectedExDateString := "EXDATE;VALUE=DATE:20250110,20250112"
+	if exdateString != expectedExDateString {
+		t.Fatalf("Expected %q, got %q", expectedExDateString, exdateString)
 	}
 }

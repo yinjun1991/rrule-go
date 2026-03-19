@@ -272,6 +272,14 @@ func validateBounds(arg ROption) error {
 		if w.n > 53 || w.n < -53 {
 			return errors.New("byday must be between 1 and 53 or -1 and -53")
 		}
+		if w.n != 0 {
+			if arg.Freq != MONTHLY && arg.Freq != YEARLY {
+				return errors.New("byday with numeric value is only allowed for MONTHLY or YEARLY")
+			}
+			if arg.Freq == YEARLY && len(arg.Byweekno) != 0 {
+				return errors.New("byday with numeric value is not allowed for YEARLY when byweekno is present")
+			}
+		}
 	}
 
 	if arg.Interval < 0 {

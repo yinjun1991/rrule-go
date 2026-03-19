@@ -254,14 +254,14 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 		Wkst:      Weekday{weekday: r.wkst},
 		Count:     r.count,
 		AllDay:    r.allDay,
-		Bysetpos:  cloneIntSlice(r.bysetpos),
-		Bymonth:   cloneIntSlice(r.bymonth),
-		Byyearday: cloneIntSlice(r.byyearday),
-		Byweekno:  cloneIntSlice(r.byweekno),
-		Byhour:    cloneIntSlice(r.byhour),
-		Byminute:  cloneIntSlice(r.byminute),
-		Bysecond:  cloneIntSlice(r.bysecond),
-		Byeaster:  cloneIntSlice(r.byeaster),
+		Bysetpos:  cloneSlice(r.bysetpos),
+		Bymonth:   cloneSlice(r.bymonth),
+		Byyearday: cloneSlice(r.byyearday),
+		Byweekno:  cloneSlice(r.byweekno),
+		Byhour:    cloneSlice(r.byhour),
+		Byminute:  cloneSlice(r.byminute),
+		Bysecond:  cloneSlice(r.bysecond),
+		Byeaster:  cloneSlice(r.byeaster),
 	}
 
 	if !r.intervalExplicit && r.interval == 1 {
@@ -309,11 +309,11 @@ func (r *Recurrence) ruleOptionFromState() ROption {
 	return option
 }
 
-func cloneIntSlice(values []int) []int {
+func cloneSlice[T any](values []T) []T {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]int, len(values))
+	out := make([]T, len(values))
 	copy(out, values)
 	return out
 }

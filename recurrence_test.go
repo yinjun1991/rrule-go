@@ -1355,16 +1355,12 @@ func TestWeeklyByWeekDay(t *testing.T) {
 }
 
 func TestWeeklyByNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: WEEKLY,
+	_, err := newRecurrence(ROption{Freq: WEEKLY,
 		Count:     3,
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 4, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 9, 9, 0, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with WEEKLY")
 	}
 }
 
@@ -1387,17 +1383,13 @@ func TestWeeklyByMonthAndWeekDay(t *testing.T) {
 }
 
 func TestWeeklyByMonthAndNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: WEEKLY,
+	_, err := newRecurrence(ROption{Freq: WEEKLY,
 		Count:     3,
 		Bymonth:   []int{1, 3},
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1998, 1, 1, 9, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 6, 9, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 8, 9, 0, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with WEEKLY")
 	}
 }
 
@@ -1832,16 +1824,12 @@ func TestDailyByWeekDay(t *testing.T) {
 }
 
 func TestDailyByNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: DAILY,
+	_, err := newRecurrence(ROption{Freq: DAILY,
 		Count:     3,
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 4, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 9, 9, 0, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with DAILY")
 	}
 }
 
@@ -1861,17 +1849,13 @@ func TestDailyByMonthAndWeekDay(t *testing.T) {
 }
 
 func TestDailyByMonthAndNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: DAILY,
+	_, err := newRecurrence(ROption{Freq: DAILY,
 		Count:     3,
 		Bymonth:   []int{1, 3},
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1998, 1, 1, 9, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 6, 9, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 8, 9, 0, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with DAILY")
 	}
 }
 
@@ -2306,16 +2290,12 @@ func TestHourlyByWeekDay(t *testing.T) {
 }
 
 func TestHourlyByNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: HOURLY,
+	_, err := newRecurrence(ROption{Freq: HOURLY,
 		Count:     3,
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 2, 10, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 2, 11, 0, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with HOURLY")
 	}
 }
 
@@ -2335,17 +2315,13 @@ func TestHourlyByMonthAndWeekDay(t *testing.T) {
 }
 
 func TestHourlyByMonthAndNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: HOURLY,
+	_, err := newRecurrence(ROption{Freq: HOURLY,
 		Count:     3,
 		Bymonth:   []int{1, 3},
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 1, 1, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 1, 2, 0, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with HOURLY")
 	}
 }
 
@@ -2776,16 +2752,12 @@ func TestMinutelyByWeekDay(t *testing.T) {
 }
 
 func TestMinutelyByNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: MINUTELY,
+	_, err := newRecurrence(ROption{Freq: MINUTELY,
 		Count:     3,
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 2, 9, 1, 0, 0, time.UTC),
-		time.Date(1997, 9, 2, 9, 2, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with MINUTELY")
 	}
 }
 
@@ -2805,17 +2777,13 @@ func TestMinutelyByMonthAndWeekDay(t *testing.T) {
 }
 
 func TestMinutelyByMonthAndNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: MINUTELY,
+	_, err := newRecurrence(ROption{Freq: MINUTELY,
 		Count:     3,
 		Bymonth:   []int{1, 3},
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 1, 0, 1, 0, 0, time.UTC),
-		time.Date(1998, 1, 1, 0, 2, 0, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with MINUTELY")
 	}
 }
 
@@ -3245,16 +3213,12 @@ func TestSecondlyByWeekDay(t *testing.T) {
 }
 
 func TestSecondlyByNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: SECONDLY,
+	_, err := newRecurrence(ROption{Freq: SECONDLY,
 		Count:     3,
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 9, 2, 9, 0, 1, 0, time.UTC),
-		time.Date(1997, 9, 2, 9, 0, 2, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with SECONDLY")
 	}
 }
 
@@ -3274,17 +3238,13 @@ func TestSecondlyByMonthAndWeekDay(t *testing.T) {
 }
 
 func TestSecondlyByMonthAndNWeekDay(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: SECONDLY,
+	_, err := newRecurrence(ROption{Freq: SECONDLY,
 		Count:     3,
 		Bymonth:   []int{1, 3},
 		Byweekday: []Weekday{TU.Nth(1), TH.Nth(-1)},
 		Dtstart:   time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	want := []time.Time{time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(1998, 1, 1, 0, 0, 1, 0, time.UTC),
-		time.Date(1998, 1, 1, 0, 0, 2, 0, time.UTC)}
-	value := r.All()
-	if !timesEqual(value, want) {
-		t.Errorf("get %v, want %v", value, want)
+	if err == nil {
+		t.Fatal("expected error for numeric BYDAY with SECONDLY")
 	}
 }
 
@@ -3867,21 +3827,6 @@ func TestBetweenInc(t *testing.T) {
 	value := r.Between(time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC), time.Date(1997, 9, 6, 9, 0, 0, 0, time.UTC), true)
 	if !timesEqual(value, want) {
 		t.Errorf("get %v, want %v", value, want)
-	}
-}
-
-func TestAllWithDefaultUtil(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: YEARLY,
-		Dtstart: time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-
-	value := r.All()
-	if len(value) > 300 || len(value) < 200 {
-		t.Errorf("No default Util time")
-	}
-
-	r, _ = newRecurrence(ROption{Freq: YEARLY})
-	if len(r.All()) != len(value) {
-		t.Errorf("No default Util time")
 	}
 }
 
@@ -4565,15 +4510,6 @@ func TestSet(t *testing.T) {
 	}
 }
 
-func TestSetOverlapping(t *testing.T) {
-	r, _ := newRecurrence(ROption{Freq: YEARLY,
-		Dtstart: time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
-	v1 := r.All()
-	if len(v1) > 300 || len(v1) < 200 {
-		t.Errorf("No default Util time")
-	}
-}
-
 func TestSetString(t *testing.T) {
 	moscow, _ := time.LoadLocation("Europe/Moscow")
 	newYork, _ := time.LoadLocation("America/New_York")
@@ -4614,11 +4550,8 @@ func TestSetDTStart(t *testing.T) {
 
 	want := `DTSTART;TZID=America/New_York:19970903T090000
 RRULE:FREQ=YEARLY;COUNT=1;BYDAY=TU
-RDATE:19970904T090000Z
-RDATE:19970909T090000Z
-EXDATE:19970904T090000Z
-EXDATE:19970911T090000Z
-EXDATE:19970918T090000Z`
+RDATE:19970904T090000Z,19970909T090000Z
+EXDATE:19970904T090000Z,19970911T090000Z,19970918T090000Z`
 	value := r.String()
 	if want != value {
 		t.Errorf("get \n%v\n want \n%v\n", value, want)

@@ -16,14 +16,12 @@ func parseRecurrence(input string) (*Recurrence, error) {
 
 func TestCompatibility(t *testing.T) {
 	str := "FREQ=WEEKLY;DTSTART=20120201T093000Z;INTERVAL=5;WKST=TU;COUNT=2;UNTIL=20130130T230000Z;BYSETPOS=2;BYMONTH=3;BYYEARDAY=95;BYWEEKNO=1;BYDAY=MO,+2FR;BYHOUR=9;BYMINUTE=30;BYSECOND=0;BYEASTER=-1"
-	r, _ := parseRecurrence(str)
-	want := "DTSTART:20120201T093000Z\nRRULE:FREQ=WEEKLY;INTERVAL=5;WKST=TU;COUNT=2;UNTIL=20130130T230000Z;BYSETPOS=2;BYMONTH=3;BYYEARDAY=95;BYWEEKNO=1;BYDAY=MO,+2FR;BYHOUR=9;BYMINUTE=30;BYSECOND=0;BYEASTER=-1"
-	if s := r.String(); s != want {
-		t.Errorf("parseRecurrence(%q).String() = %q, want %q", str, s, want)
+	if _, err := parseRecurrence(str); err == nil {
+		t.Errorf("parseRecurrence(%q) expected error for numeric BYDAY with WEEKLY", str)
 	}
-	r, _ = parseRecurrence(want)
-	if s := r.String(); s != want {
-		t.Errorf("parseRecurrence(%q).String() = %q, want %q", want, want, want)
+	want := "DTSTART:20120201T093000Z\nRRULE:FREQ=WEEKLY;INTERVAL=5;WKST=TU;COUNT=2;UNTIL=20130130T230000Z;BYSETPOS=2;BYMONTH=3;BYYEARDAY=95;BYWEEKNO=1;BYDAY=MO,+2FR;BYHOUR=9;BYMINUTE=30;BYSECOND=0;BYEASTER=-1"
+	if _, err := parseRecurrence(want); err == nil {
+		t.Errorf("parseRecurrence(%q) expected error for numeric BYDAY with WEEKLY", want)
 	}
 }
 

@@ -693,6 +693,29 @@ func TestNewRRule_ValidateBounds_ByDayN_OutOfRange(t *testing.T) {
 	}
 }
 
+func TestNewRRule_ValidateBounds_ByDayNumericWithWeekly(t *testing.T) {
+	opt := ROption{
+		Freq:      WEEKLY,
+		Dtstart:   mustUTC(2024, 1, 1, 0, 0, 0),
+		Byweekday: []Weekday{FR.Nth(2)},
+	}
+	if _, err := newRecurrence(opt); err == nil {
+		t.Fatal("expected error for numeric BYDAY with WEEKLY, got nil")
+	}
+}
+
+func TestNewRRule_ValidateBounds_ByDayNumericWithYearlyAndByWeekNo(t *testing.T) {
+	opt := ROption{
+		Freq:      YEARLY,
+		Dtstart:   mustUTC(2024, 1, 1, 0, 0, 0),
+		Byweekno:  []int{1},
+		Byweekday: []Weekday{MO.Nth(1)},
+	}
+	if _, err := newRecurrence(opt); err == nil {
+		t.Fatal("expected error for numeric BYDAY with YEARLY and BYWEEKNO, got nil")
+	}
+}
+
 func TestNewRRule_ValidateBounds_IntervalNegative(t *testing.T) {
 	opt := ROption{Freq: DAILY, Dtstart: mustUTC(2024, 1, 1, 0, 0, 0), Interval: -1}
 	if _, err := newRecurrence(opt); err == nil {

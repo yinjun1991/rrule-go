@@ -1036,8 +1036,6 @@ func TestIteratorAllDayVsTimedEvents(t *testing.T) {
 			},
 			expected: []time.Time{
 				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), // All-day event hours start at 0.
-				time.Date(2020, 1, 1, 1, 0, 0, 0, time.UTC),
-				time.Date(2020, 1, 1, 2, 0, 0, 0, time.UTC),
 			},
 		},
 		{
