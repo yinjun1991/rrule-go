@@ -465,6 +465,19 @@ func (r *Recurrence) applyRule(option ROption) error {
 			option.Byweekday = []Weekday{{weekday: toPyWeekday(r.dtstart.Weekday())}}
 		}
 	}
+	// RFC 5545 §3.3.10：规则未包含的信息由 DTSTART 推导。该推导在 YEARLY 上对称：
+	// 缺 BYMONTHDAY 时取 DTSTART 的日（上面的默认补全已实现），缺 BYMONTH 时也应取 DTSTART 的月。
+	// 只实现前者时，FREQ=YEARLY;BYMONTHDAY=13 会按展开表的 Expand 语义铺满 12 个月，
+	// "每年 6 月 13 日"变成"每月 13 日"。
+	// 只写解析态 option；bymonthExplicit 在上方按入参计算，因此 RRuleString() 渲染与写回仍是原文。
+	// 排除 BYSETPOS：它作用在"按 FREQ 周期展开后的候选集"上，月份集合变化会改变其指向的实例。
+	if r.freq == YEARLY &&
+		len(option.Bymonth) == 0 && len(option.Bymonthday) != 0 &&
+		len(option.Byweekday) == 0 && len(option.Byweekno) == 0 &&
+		len(option.Byyearday) == 0 && len(option.Byeaster) == 0 &&
+		len(option.Bysetpos) == 0 {
+		option.Bymonth = []int{int(r.dtstart.Month())}
+	}
 	r.bymonth = option.Bymonth
 	r.byyearday = option.Byyearday
 	r.byeaster = option.Byeaster
