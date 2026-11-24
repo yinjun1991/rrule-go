@@ -295,16 +295,44 @@ func TestYearlyByMonth(t *testing.T) {
 }
 
 func TestYearlyByMonthDay(t *testing.T) {
+	// RFC 5545 §3.3.10：规则未包含的信息由 DTSTART 推导。本实现把该推导用在 YEARLY 的两个维度上：
+	// 缺 BYMONTHDAY 取 DTSTART 的日（既有默认补全），缺 BYMONTH 也取 DTSTART 的月（本次改动）。
+	// 因此 BYMONTHDAY 只在 DTSTART 所在月份内展开，而不是铺满 12 个月。
 	r, _ := NewRRule(ROption{Freq: YEARLY,
 		Count:      3,
 		Bymonthday: []int{1, 3},
 		Dtstart:    time.Date(1997, 9, 2, 9, 0, 0, 0, time.UTC)})
 	want := []time.Time{time.Date(1997, 9, 3, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 10, 1, 9, 0, 0, 0, time.UTC),
-		time.Date(1997, 10, 3, 9, 0, 0, 0, time.UTC)}
+		time.Date(1998, 9, 1, 9, 0, 0, 0, time.UTC),
+		time.Date(1998, 9, 3, 9, 0, 0, 0, time.UTC)}
 	value := r.All()
 	if !timesEqual(value, want) {
 		t.Errorf("get %v, want %v", value, want)
+	}
+}
+
+func TestYearlyByMonthDayInfersDtstartMonth(t *testing.T) {
+	r, _ := NewRRule(ROption{Freq: YEARLY,
+		Bymonthday: []int{13},
+		Dtstart:    time.Date(2015, 6, 13, 0, 0, 0, 0, time.UTC)})
+	from := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2026, 12, 31, 23, 59, 59, 0, time.UTC)
+	want := []time.Time{time.Date(2026, 6, 13, 0, 0, 0, 0, time.UTC)}
+	if value := r.Between(from, to, true); !timesEqual(value, want) {
+		t.Errorf("get %v, want %v", value, want)
+	}
+}
+
+func TestYearlyByMonthDayKeepsOptionsForRendering(t *testing.T) {
+	// 补月只写解析态，Options 保持原样：渲染与写回不能包含推断出来的 BYMONTH。
+	r, _ := NewRRule(ROption{Freq: YEARLY,
+		Bymonthday: []int{13},
+		Dtstart:    time.Date(2015, 6, 13, 0, 0, 0, 0, time.UTC)})
+	if len(r.Options.Bymonth) != 0 {
+		t.Fatalf("Options.Bymonth get %v, want empty", r.Options.Bymonth)
+	}
+	if rendered := r.Options.RRuleString(); rendered != "FREQ=YEARLY;BYMONTHDAY=13" {
+		t.Errorf("render get %q, want %q", rendered, "FREQ=YEARLY;BYMONTHDAY=13")
 	}
 }
 

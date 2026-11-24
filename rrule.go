@@ -114,6 +114,19 @@ func buildRRule(arg ROption) RRule {
 			arg.Byweekday = []Weekday{{weekday: toPyWeekday(r.dtstart.Weekday())}}
 		}
 	}
+	// RFC 5545 §3.3.10：规则未包含的信息由 DTSTART 推导。该推导在 YEARLY 上对称：
+	// 缺 BYMONTHDAY 时取 DTSTART 的日（上面的默认补全已实现），缺 BYMONTH 时也应取 DTSTART 的月。
+	// 只实现前者时，FREQ=YEARLY;BYMONTHDAY=13 会按展开表的 Expand 语义铺满 12 个月，
+	// "每年 6 月 13 日"变成"每月 13 日"。
+	// 只写解析态 arg；r.Options 已在前面快照，因此 RRuleString()/Recurrence() 渲染与写回仍是原文。
+	// 排除 BYSETPOS：它作用在"按 FREQ 周期展开后的候选集"上，月份集合变化会改变其指向的实例。
+	if r.freq == YEARLY &&
+		len(arg.Bymonth) == 0 && len(arg.Bymonthday) != 0 &&
+		len(arg.Byweekday) == 0 && len(arg.Byweekno) == 0 &&
+		len(arg.Byyearday) == 0 && len(arg.Byeaster) == 0 &&
+		len(arg.Bysetpos) == 0 {
+		arg.Bymonth = []int{int(r.dtstart.Month())}
+	}
 	r.bymonth = arg.Bymonth
 	r.byyearday = arg.Byyearday
 	r.byeaster = arg.Byeaster
